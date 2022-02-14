@@ -1,0 +1,9 @@
+{
+  "name": "map",
+  "description": {
+    "en": "Manage applied projects",
+    "ru": "Управление прикладными проектами"
+  },
+  "version": "${VERSION}",
+  "plugin_path": "./map_plugin"
+}
