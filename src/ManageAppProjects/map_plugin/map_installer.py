@@ -92,6 +92,7 @@ def _update_sungero_config(project_config_path, sungero_config_path):
     dst_config["variables"]["database"] = src_config["variables"]["database"]
     dst_config["variables"]["home_path"] = src_config["variables"]["home_path"]
     dst_config["variables"]["home_path_src"]  = src_config["variables"]["home_path_src"]
+    return dst_config
 
 @component(alias=MANAGE_APPLIED_PROJECTS_ALIAS)
 class ManageAppliedProject(BaseComponent):
