@@ -3,7 +3,7 @@
 from asyncore import write
 import pathlib
 from pprint import pprint
-from typing import Optional
+from typing import Optional, Dict, Any
 import termcolor
 import time
 import pprint
@@ -23,6 +23,8 @@ from common_plugin import yaml_tools
 from sungero_deploy.scripts_config import get_config_model
 from sungero_deploy.tools.sungerodb import SungeroDB
 from py_common import io_tools
+from sungero_tenants.dbtools import create_database_from_backup, create_database_backup, is_database_exists
+from sungero_tenants.tenant_model import TenantModel
 
 MANAGE_APPLIED_PROJECTS_ALIAS = 'map'
 
@@ -73,6 +75,24 @@ def _generate_empty_config_by_template(new_config_path: str, template_config: st
     else:
         log.error(f'Файл {new_config_path} уже существует.')
 
+def _update_sungero_config(project_config_path, sungero_config_path):
+    """Преобразовать текущий config.yml в соотвтетствии с указанным конфигом проекта.
+    Преобразование выполняется без сохранения на диске
+    
+    Args:
+        * project_config_path - путь к конфигу проекта
+    
+    Return:
+        * преоразованный конфиг
+    """
+    src_config = yaml_tools.load_yaml_from_file(project_config_path)
+    dst_config = yaml_tools.load_yaml_from_file(sungero_config_path)
+    dst_config["services_config"]["DevelopmentStudio"]['REPOSITORIES']["repository"]  = src_config["services_config"]["DevelopmentStudio"]['REPOSITORIES']["repository"].copy()
+    dst_config["variables"]["purpose"] = src_config["variables"]["purpose"]
+    dst_config["variables"]["database"] = src_config["variables"]["database"]
+    dst_config["variables"]["home_path"] = src_config["variables"]["home_path"]
+    dst_config["variables"]["home_path_src"]  = src_config["variables"]["home_path_src"]
+
 @component(alias=MANAGE_APPLIED_PROJECTS_ALIAS)
 class ManageAppliedProject(BaseComponent):
     """ Компонент Изменение проекта. """
@@ -121,6 +141,7 @@ class ManageAppliedProject(BaseComponent):
         log.info('do map generate_empty_project_config - создать заготовку для файла описания проекта')
         log.info('do map create_project - создать новый проект: новую БД, хранилище документов, принять пакет разработки, \
 инициализировать его и принять стандартные шаблоны')
+        log.info('do map clone_project - клонировать проект (сделать копии БД и домашнего каталога)')
         log.info('do map export_devpack - выгрузить пакет разработки')
         log.info('do map build_distributions - сформировать дистрибутивы решения')
         log.info('do map generate_empty_distributions_config - сформировать пустой конфиг с описанием дистрибутивов решения')
@@ -167,13 +188,7 @@ class ManageAppliedProject(BaseComponent):
 
                 # скорректировать etc\config.yml
                 log.info(_colorize("Корректировка config.yml"))
-                src_config = yaml_tools.load_yaml_from_file(project_config_path)
-                dst_config = yaml_tools.load_yaml_from_file(self.config_path)
-                dst_config["services_config"]["DevelopmentStudio"]['REPOSITORIES']["repository"]  = src_config["services_config"]["DevelopmentStudio"]['REPOSITORIES']["repository"].copy()
-                dst_config["variables"]["purpose"] = src_config["variables"]["purpose"]
-                dst_config["variables"]["database"] = src_config["variables"]["database"]
-                dst_config["variables"]["home_path"] = src_config["variables"]["home_path"]
-                dst_config["variables"]["home_path_src"]  = src_config["variables"]["home_path_src"]
+                dst_config = _update_sungero_config(project_config_path, self.config_path)
                 yaml_tools.yaml_dump_to_file(dst_config, self.config_path)
                 time.sleep(2)
 
@@ -513,3 +528,58 @@ distributions:
                     date_subs = file[-14:-4]
                     if date_subs <= limit_date:
                         os.remove(os.path.join(root, file))
+
+
+    def clone_project(self, src_project_config_path: str, dst_project_config_path: str, confirm: bool = True) -> None:
+        """ Сделать копию прикладного проекта (эксперементальная фича).
+        Будет сделана копия БД и домашнего каталога проекта.
+
+        Args:
+            src_project_config_path: путь к файлу с описанием проекта-источника
+            dst_project_config_path: путь к файлу с описанием проекта, в который надо скопировать
+            confirm: признак необходимости выводить запрос на создание проекта. По умолчанию - True
+        """
+        while (True):
+            src_project_config = yaml_tools.load_yaml_from_file(src_project_config_path)
+            src_sungero_config = _update_sungero_config(src_project_config_path, self.config_path)
+            src_dbname = src_project_config["variables"]["database"]
+            src_homepath = src_project_config["variables"]["home_path"]
+            if not Path(src_homepath).is_dir():
+                raise AssertionError(f'Исходный домашний каталог "{src_homepath}" не существует.')
+            if not is_database_exists(src_sungero_config, src_dbname):
+                raise AssertionError(f'Исходная база данных "{src_dbname}" не существует.')
+
+            dst_project_config = yaml_tools.load_yaml_from_file(dst_project_config_path)
+            dst_sungero_config = _update_sungero_config(dst_project_config_path, self.config_path)
+            dst_dbname = dst_project_config["variables"]["database"]
+            dst_homepath = dst_project_config["variables"]["home_path"]
+            if Path(dst_homepath).is_dir():
+                raise AssertionError(f'Целевой домашний каталог "{dst_homepath}" уже существует.')
+            if is_database_exists(dst_sungero_config, dst_dbname):
+                raise AssertionError(f'Целевая база данных "{dst_dbname}" уже существует.')
+
+            print(f'БД-источник: {src_project_config["variables"]["database"]}')
+            print(f'БД-приемник: {dst_project_config["variables"]["database"]}')
+
+            log.info(Bold(f'Параметры клонирования проекта:'))
+            log.info(f'database: {_colorize(src_dbname)} -> {_colorize(dst_dbname)}')
+            log.info(f'homepath: {_colorize(src_homepath)} -> {_colorize(dst_homepath)}')
+
+            answ = input("Клонировать проект? (y,n):") if confirm else 'y'
+            if answ=='y' or answ=='Y':
+                # Сделать копию БД
+                log.info(_colorize(f'Создание резеврной копии базы данных {src_dbname}'))
+                create_database_backup(get_config_model(src_sungero_config), src_dbname)
+                # Восстановить БД
+                # костыль - создаем модель псевдотенант, т.к. create_database_from_backup требует тип TenantModel
+                log.info(_colorize(f'Восстановление БД {dst_dbname}'))
+                tenant_model = TenantModel({'db': dst_dbname})
+                create_database_from_backup(get_config_model(src_sungero_config), src_dbname, tenant_model)
+                # Сделать копию домашнего каталога проекта
+                log.info(_colorize(f'Копирование домашнего каталога {src_homepath} {dst_homepath}'))
+                shutil.copytree(src_homepath, dst_homepath)
+                # переключить проект
+                self.set(dst_project_config_path)
+                break
+            elif answ=='n' or answ=='N':
+                break
