@@ -540,24 +540,29 @@ distributions:
             dst_project_config_path: путь к файлу с описанием проекта, в который надо скопировать
             confirm: признак необходимости выводить запрос на создание проекта. По умолчанию - True
         """
-        while (True):
-            src_project_config = yaml_tools.load_yaml_from_file(src_project_config_path)
-            src_sungero_config = _update_sungero_config(src_project_config_path, self.config_path)
-            src_dbname = src_project_config["variables"]["database"]
-            src_homepath = src_project_config["variables"]["home_path"]
-            if not Path(src_homepath).is_dir():
-                raise AssertionError(f'Исходный домашний каталог "{src_homepath}" не существует.')
-            if not is_database_exists(src_sungero_config, src_dbname):
-                raise AssertionError(f'Исходная база данных "{src_dbname}" не существует.')
 
-            dst_project_config = yaml_tools.load_yaml_from_file(dst_project_config_path)
-            dst_sungero_config = _update_sungero_config(dst_project_config_path, self.config_path)
-            dst_dbname = dst_project_config["variables"]["database"]
-            dst_homepath = dst_project_config["variables"]["home_path"]
-            if Path(dst_homepath).is_dir():
-                raise AssertionError(f'Целевой домашний каталог "{dst_homepath}" уже существует.')
-            if is_database_exists(dst_sungero_config, dst_dbname):
-                raise AssertionError(f'Целевая база данных "{dst_dbname}" уже существует.')
+        src_project_config = yaml_tools.load_yaml_from_file(src_project_config_path)
+        src_sungero_config = _update_sungero_config(src_project_config_path, self.config_path)
+        src_dbname = src_project_config["variables"]["database"]
+        src_homepath = src_project_config["variables"]["home_path"]
+
+        if src_sungero_config["common_config"]["DATABASE_ENGINE"] == 'postgres':
+            raise AssertionError(f'В этой команде PostgreSQL не поддерживается.')
+        if not Path(src_homepath).is_dir():
+            raise AssertionError(f'Исходный домашний каталог "{src_homepath}" не существует.')
+        if not is_database_exists(self.config, src_dbname):
+            raise AssertionError(f'Исходная база данных "{src_dbname}" не существует.')
+
+        dst_project_config = yaml_tools.load_yaml_from_file(dst_project_config_path)
+        dst_sungero_config = _update_sungero_config(dst_project_config_path, self.config_path)
+        dst_dbname = dst_project_config["variables"]["database"]
+        dst_homepath = dst_project_config["variables"]["home_path"]
+        if Path(dst_homepath).is_dir():
+            raise AssertionError(f'Целевой домашний каталог "{dst_homepath}" уже существует.')
+        if is_database_exists(self.config, dst_dbname):
+            raise AssertionError(f'Целевая база данных "{dst_dbname}" уже существует.')
+
+        while (True):
 
             print(f'БД-источник: {src_project_config["variables"]["database"]}')
             print(f'БД-приемник: {dst_project_config["variables"]["database"]}')
@@ -570,12 +575,12 @@ distributions:
             if answ=='y' or answ=='Y':
                 # Сделать копию БД
                 log.info(_colorize(f'Создание резеврной копии базы данных {src_dbname}'))
-                create_database_backup(get_config_model(src_sungero_config), src_dbname)
+                create_database_backup(self.config, src_dbname)
                 # Восстановить БД
                 # костыль - создаем модель псевдотенант, т.к. create_database_from_backup требует тип TenantModel
                 log.info(_colorize(f'Восстановление БД {dst_dbname}'))
                 tenant_model = TenantModel({'db': dst_dbname})
-                create_database_from_backup(get_config_model(src_sungero_config), src_dbname, tenant_model)
+                create_database_from_backup(self.config, src_dbname, tenant_model)
                 # Сделать копию домашнего каталога проекта
                 log.info(_colorize(f'Копирование домашнего каталога {src_homepath} {dst_homepath}'))
                 shutil.copytree(src_homepath, dst_homepath)
