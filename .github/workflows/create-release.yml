@@ -1,0 +1,76 @@
+name: create-release
+
+on: 
+  push:
+    tags:
+    - "v[0-9]+.[0-9]+.[0-9]+"
+    - "v[0-9]+.[0-9]+.[0-9]+.[0-9]+"
+
+jobs:
+  changelog:
+    name: Generate changelog
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v2
+        with:
+          fetch-depth: 0
+      - name: Generate a changelog
+        uses: orhun/git-cliff-action@v1
+        id: git-cliff
+        with:
+          config: cliff.toml
+          args: -vv --latest --strip header
+        env:
+          OUTPUT: CHANGELOG.md
+      - name: Upload CHANGELOG.md
+        uses: actions/upload-artifact@v2
+        with:
+          name: changelog
+          path: CHANGELOG.md
+
+  create_release_bin:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v2
+        with:
+          fetch-depth: 0
+      - name: Update version
+        uses: brettdorrans/write-version-to-file@master
+        with:
+          filename: 'src/ManageAppProjects/manifest.json'
+          placeholder: '${VERSION}'
+      - name: Create zip
+        uses: papeloto/action-zip@v1
+        with:
+          files: src/ManageAppProjects readme.md
+          dest: ManageAppProjects.zip
+          recursive: true
+      - name: Upload release.zip
+        uses: actions/upload-artifact@v2
+        with:
+          name: release_bin
+          path: ManageAppProjects.zip
+
+  publish:
+    runs-on: ubuntu-latest
+    needs: [changelog, create_release_bin]
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v2
+      - name: Download CHANGELOG.md
+        uses: actions/download-artifact@v2
+        with:
+          name: changelog
+      - name: Download release.zip
+        uses: actions/download-artifact@v2
+        with:
+          name: release_bin
+      - name: Publish
+        uses: softprops/action-gh-release@v1
+        with:
+          files: "ManageAppProjects.zip"
+          body_path: CHANGELOG.md
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

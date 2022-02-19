@@ -13,20 +13,126 @@ import os
 
 from fire.formatting import Bold
 
-from sungero_deploy.all import All
-from sungero_deploy.static_controller import StaticController
 from components.base_component import BaseComponent
 from components.component_manager import component
 from py_common.logger import log
-from sungero_deploy.deployment_tool import DeploymentTool
 from common_plugin import yaml_tools
+from sungero_deploy.all import All
+from sungero_deploy.deployment_tool import DeploymentTool
+from sungero_deploy.static_controller import StaticController
 from sungero_deploy.scripts_config import get_config_model
 from sungero_deploy.tools.sungerodb import SungeroDB
-from py_common import io_tools
-from sungero_tenants.dbtools import create_database_from_backup, create_database_backup, is_database_exists
-from sungero_tenants.tenant_model import TenantModel
+from py_common import io_tools, process
+from sungero_tenants.dbtools import get_database_folder, ENABLE_XP_CMDSHELL
+from sungero_deploy.scripts_config import Config
 
 MANAGE_APPLIED_PROJECTS_ALIAS = 'map'
+
+#region service function
+
+def _copy_database_mssql(config: Config, src_db_name: str, dst_db_name: str) -> None:
+    """Создать копию базы данных на Microsoft SQL Server.
+
+    Args:
+        config: конфиг Sungero.
+        src_db_name: исходная БД.
+        dst_db_name: целевая БД.
+    """
+    log.info(f'Create database backup: "{src_db_name}".')
+    database_folder = get_database_folder(config, src_db_name)
+    command_text = f"""
+        -- ============ копипаста из dbtools.create_database_backup() ============
+        declare @DatabaseName sysname = '{src_db_name}'
+        declare @DatabaseFolder nvarchar(255) = '{database_folder}'
+
+        -- Получить путь к последнему полному бэкапу базы.
+        declare @FullBackupPath nvarchar(255) = ''
+        set @FullBackupPath = @DatabaseFolder + @DatabaseName + '_' + replace(cast(newid() as varchar(36)), '-', '') + '.full'
+
+        declare @BackupName nvarchar(255) = 'Backup created by tenant manage script'
+        backup database @DatabaseName to disk = @FullBackupPath with copy_only, init, name = @BackupName
+        if @@ERROR <> 0
+        begin
+          print(@FullBackupPath)
+          return
+        end
+        print('!Создана полная резервная копия "' + @FullBackupPath + '"')
+        select @FullBackupPath
+
+        -- =========== копипаста из dbtools.create_database_from_backup() ============
+        declare @NewDatabaseName sysname = '{dst_db_name}'
+
+        print('!Создание из резервной копии: "' + @FullBackupPath + '"')
+        -- Сформировать список файлов эталонной базы данных для запроса восстановления из бэкапа.
+        declare @productver VARCHAR(50) = (SELECT CAST(SERVERPROPERTY('productversion') AS VARCHAR(50)))
+        declare @version int = CAST(LEFT(@productver, CHARINDEX('.', @productver)-1) AS INT)
+
+        create table #BackupFiles (LogicalName nvarchar(128), PhysicalName nvarchar(260), Type char(1), FileGroupName nvarchar(120),
+            Size numeric(20, 0), MaxSize numeric(20, 0), FileID bigint, CreateLSN numeric(25,0), DropLSN numeric(25,0),
+            UniqueID uniqueidentifier, ReadOnlyLSN numeric(25,0), ReadWriteLSN numeric(25,0), BackupSizeInBytes bigint,
+            SourceBlockSize int, FileGroupID int, LogGroupGUID uniqueidentifier, DifferentialBaseLSN numeric(25,0),
+            DifferentialBaseGUID uniqueidentifier, IsReadOnly bit, IsPresent bit, TDEThumbprint varbinary(32));
+        -- С версии SQL2016 появилась новая колонка.
+        if @version > 12
+        begin
+        alter table #BackupFiles
+            add SnapshotUrl nvarchar(2083) NULL;
+        end
+        insert into #BackupFiles
+        exec('restore filelistonly from disk = ''' + @FullBackupPath + '''')
+        if @@ERROR <> 0
+        return
+        declare @MoveStatement nvarchar(4000) = ''
+        select
+        @MoveStatement = @MoveStatement + ', move ''' + LogicalName + ''' to ''' +
+            @DatabaseFolder + @NewDatabaseName +
+            case
+            when Type = 'D' then '.mdf'
+            when Type = 'L' then '_log.ldf'
+            when Type = 'F' then '\FullTextData'
+            end + ''''
+        from
+        #BackupFiles
+        drop table #BackupFiles
+        print(@MoveStatement)
+        -- Восстановить новую базу из бэкапа эталонной.
+        exec('restore database [' + @NewDatabaseName + '] from disk = ''' + @FullBackupPath + ''' with recovery, replace ' + @MoveStatement)
+        if @@ERROR = 0
+            print('!База данных "' + @NewDatabaseName + '" создана')
+
+        -- Удалить созданную резервную копию
+        declare @Command varchar(4000) = ''
+        set @Command = 'del "' + @FullBackupPath + '"'
+        exec master..xp_cmdshell @Command
+        if @@ERROR = 0
+            print('!Файл созданной резервной копии удален')
+        """
+
+    result = SungeroDB(config).execute_command(ENABLE_XP_CMDSHELL.format(command_text), return_results=True)
+    log.info(f'Database copied: {result}')
+
+def _copy_database_postgresql(src_sungero_config: Any, src_db_name: str, dst_db_name: str):
+    """Создать копию базы данных на PostgreSQL.
+
+    Args:
+        config: конфиг Sungero в виде yaml.
+        src_db_name: исходная БД.
+        dst_db_name: целевая БД.
+    """
+    manage_applied_projects_config = src_sungero_config.get("manage_applied_projects", None)
+    if manage_applied_projects_config == None:
+        raise AssertionError('В config.yml отсутствует раздел "manage_applied_projects"')
+    postgree_path = manage_applied_projects_config.get("postgresql_bin", None)
+    if postgree_path == None:
+        raise AssertionError('В config.yml отсутствует параметр manage_applied_projects -> postgresql_bin"')
+    cmd = f'"{postgree_path}\\createdb.exe" -w {dst_dbname}'
+    exit_code = process.try_execute(cmd, encoding='cp1251') #cp1251  utf-8
+    if exit_code != 0:
+        raise IOError(f'Ошибка при создании БД')
+    cmd = f'"{postgree_path}\\pg_dump.exe" -h localhost -w {src_dbname} | "{postgree_path}\\psql" -q -h localhost -w {dst_dbname}'
+    exit_code = process.try_execute(cmd, encoding='cp1251')
+    if exit_code != 0:
+        raise IOError(f'Ошибка при копировании данных БД')
 
 def _colorize(x):
     return termcolor.colored(x, color="green", attrs=["bold"])
@@ -93,6 +199,7 @@ def _update_sungero_config(project_config_path, sungero_config_path):
     dst_config["variables"]["home_path"] = src_config["variables"]["home_path"]
     dst_config["variables"]["home_path_src"]  = src_config["variables"]["home_path_src"]
     return dst_config
+#endregion
 
 @component(alias=MANAGE_APPLIED_PROJECTS_ALIAS)
 class ManageAppliedProject(BaseComponent):
@@ -122,31 +229,7 @@ class ManageAppliedProject(BaseComponent):
         log.info(f'"{self.__class__.__name__}" component has been successfully uninstalled.')
         self._print_help_after_action()
 
-    def current(self) -> None:
-        """ Показать параметры текущего проекта """
-        _show_config(self.config_path)
-
-    def check_config(self, config_path: str) -> None:
-        """ Показать содержимое указанного файла описания проекта
-
-        Args:
-            config_path: путь к файлу с описанием проекта
-        """
-        _show_config(config_path)
-
-    @staticmethod
-    def help() -> None:
-        log.info('do map current - показать ключевую информацию из текущего config.yml')
-        log.info('do map check_config - показать ключевую информацию из указанного yml-файла описания проекта')
-        log.info('do map set - переключиться на проект, описаный в указанном yml-файла')
-        log.info('do map generate_empty_project_config - создать заготовку для файла описания проекта')
-        log.info('do map create_project - создать новый проект: новую БД, хранилище документов, принять пакет разработки, \
-инициализировать его и принять стандартные шаблоны')
-        log.info('do map clone_project - клонировать проект (сделать копии БД и домашнего каталога)')
-        log.info('do map export_devpack - выгрузить пакет разработки')
-        log.info('do map build_distributions - сформировать дистрибутивы решения')
-        log.info('do map generate_empty_distributions_config - сформировать пустой конфиг с описанием дистрибутивов решения')
-        log.info('do map clear_log - удалить старые логи')
+    #region manage projects
 
     def create_project(self, project_config_path: str, package_path:str, need_import_src:bool = False, confirm: bool = True) -> None:
         """ Создать новый прикладной проект (эксперементальная фича).
@@ -291,6 +374,93 @@ class ManageAppliedProject(BaseComponent):
             elif answ=='n' or answ=='N':
                 break
 
+    def generate_empty_project_config(self, new_config_path: str) -> None:
+        """ Создать новый файл с описанием проекта
+
+        Args:
+            new_config_path - путь к файлу, который нужно создать
+        """
+        template_config="""# ключевые параметры проекта
+variables:
+    # Назначение проекта
+    purpose: '<Назначение проекта>'
+    # БД проекта
+    database: '<База данных>'
+    # Домашняя директория, относительно которой хранятся все данные сервисов.
+    # Используется только в конфигурационном файле.
+    home_path: '<Домашний каталог>'
+    # Корневой каталог c репозиториями проекта
+    home_path_src: '<корневой каталог репозитория проекта>'
+# репозитории
+services_config:
+    DevelopmentStudio:
+        REPOSITORIES:
+            repository:
+            -   '@folderName': '<папка репозитория-1>'
+                '@solutionType': 'Work'
+                '@url': '<url репозитория-1>'
+            -   '@folderName': '<папка репозитория-2>'
+                '@solutionType': 'Base'
+                '@url': '<url репозитория-2>'
+"""
+        _generate_empty_config_by_template(new_config_path, template_config)
+
+    def clone_project(self, src_project_config_path: str, dst_project_config_path: str, confirm: bool = True) -> None:
+        """ Сделать копию прикладного проекта (эксперементальная фича).
+        Будет сделана копия БД и домашнего каталога проекта.
+
+        Args:
+            src_project_config_path: путь к файлу с описанием проекта-источника
+            dst_project_config_path: путь к файлу с описанием проекта, в который надо скопировать
+            confirm: признак необходимости выводить запрос на создание проекта. По умолчанию - True
+        """
+        sungero_db = SungeroDB(get_config_model(self.config_path))
+
+        src_project_config = yaml_tools.load_yaml_from_file(_get_check_file_path(src_project_config_path))
+        src_sungero_config = _update_sungero_config(src_project_config_path, self.config_path)
+        src_dbname = src_project_config["variables"]["database"]
+        src_homepath = src_project_config["variables"]["home_path"]
+        if not Path(src_homepath).is_dir():
+            raise AssertionError(f'Исходный домашний каталог "{src_homepath}" не существует.')
+        if not sungero_db.is_db_exist(src_dbname):
+            raise AssertionError(f'Исходная база данных "{src_dbname}" не существует.')
+
+        dst_project_config = yaml_tools.load_yaml_from_file(_get_check_file_path(dst_project_config_path))
+        dst_dbname = dst_project_config["variables"]["database"]
+        dst_homepath = dst_project_config["variables"]["home_path"]
+        if Path(dst_homepath).is_dir():
+            raise AssertionError(f'Целевой домашний каталог "{dst_homepath}" уже существует.')
+        if sungero_db.is_db_exist(dst_dbname):
+            raise AssertionError(f'Целевая база данных "{dst_dbname}" уже существует.')
+
+        datadase_engine = src_sungero_config["common_config"]["DATABASE_ENGINE"]
+        while (True):
+            log.info('')
+            log.info(Bold(f'Параметры клонирования проекта:'))
+            log.info(f'database: {_colorize(src_dbname)} -> {_colorize(dst_dbname)}')
+            log.info(f'homepath: {_colorize(src_homepath)} -> {_colorize(dst_homepath)}')
+
+            answ = input("Клонировать проект? (y,n):") if confirm else 'y'
+            if answ=='y' or answ=='Y':
+                # Копирование БД
+                log.info(_colorize(f'Копирование базы данных {src_dbname} в {dst_dbname}'))
+                if datadase_engine == 'mssql':
+                    _copy_database_mssql(self.config, src_dbname, dst_dbname)
+                else:
+                    _copy_database_postgresql(src_sungero_config, src_dbname, dst_dbname)
+                # Сделать копию домашнего каталога проекта
+                log.info(_colorize(f'Копирование домашнего каталога {src_homepath} {dst_homepath}'))
+                shutil.copytree(src_homepath, dst_homepath)
+                # переключить проект
+                log.info("")
+                self.set(dst_project_config_path, confirm)
+                break
+            elif answ=='n' or answ=='N':
+                break
+
+    #endregion
+
+    #region manage distriobution
     def build_distributions(self, distriputions_config_path: str, destination_folder: str,
                             repo_folder: str, increment_version: bool = True) -> int:
         """Построить дистрибутивы проекта
@@ -432,37 +602,6 @@ class ManageAppliedProject(BaseComponent):
         command = f' --configuration {devpack_config_name} --development-package {devpack_file_name} {inc_ver_param} {set_ver_param}'
         DevelopmentStudio(self.config_path).run(command=command)
 
-    def generate_empty_project_config(self, new_config_path: str) -> None:
-        """ Создать новый файл с описанием проекта
-
-        Args:
-            new_config_path - путь к файлу, который нужно создать
-        """
-        template_config="""# ключевые параметры проекта
-variables:
-    # Назначение проекта
-    purpose: '<Назначение проекта>'
-    # БД проекта
-    database: '<База данных>'
-    # Домашняя директория, относительно которой хранятся все данные сервисов.
-    # Используется только в конфигурационном файле.
-    home_path: '<Домашний каталог>'
-    # Корневой каталог c репозиториями проекта
-    home_path_src: '<корневой каталог репозитория проекта>'
-# репозитории
-services_config:
-    DevelopmentStudio:
-        REPOSITORIES:
-            repository:
-            -   '@folderName': '<папка репозитория-1>'
-                '@solutionType': 'Work'
-                '@url': '<url репозитория-1>'
-            -   '@folderName': '<папка репозитория-2>'
-                '@solutionType': 'Base'
-                '@url': '<url репозитория-2>'
-"""
-        _generate_empty_config_by_template(new_config_path, template_config)
-
     def generate_empty_distributions_config(self, new_config_path: str) -> None:
         """ Создать новый файл с описанием дистрибутивов проекта
 
@@ -505,6 +644,9 @@ distributions:
 """
         _generate_empty_config_by_template(new_config_path, template_config)
 
+    #endregion
+
+    #region other 
     def clear_log(self, root_logs: str = None, limit_day: int = 3) -> None:
         """Удалить старые логи. Чистит в root_logs и в подкаталогах.
         Предполагается, что последние символы имени файла лога - YYYY-MM-DD.log
@@ -530,62 +672,30 @@ distributions:
                     if date_subs <= limit_date:
                         os.remove(os.path.join(root, file))
 
+    def current(self) -> None:
+        """ Показать параметры текущего проекта """
+        _show_config(self.config_path)
 
-    def clone_project(self, src_project_config_path: str, dst_project_config_path: str, confirm: bool = True) -> None:
-        """ Сделать копию прикладного проекта (эксперементальная фича).
-        Будет сделана копия БД и домашнего каталога проекта.
+    def check_config(self, config_path: str) -> None:
+        """ Показать содержимое указанного файла описания проекта
 
         Args:
-            src_project_config_path: путь к файлу с описанием проекта-источника
-            dst_project_config_path: путь к файлу с описанием проекта, в который надо скопировать
-            confirm: признак необходимости выводить запрос на создание проекта. По умолчанию - True
+            config_path: путь к файлу с описанием проекта
         """
+        _show_config(config_path)
 
-        src_project_config = yaml_tools.load_yaml_from_file(src_project_config_path)
-        src_sungero_config = _update_sungero_config(src_project_config_path, self.config_path)
-        src_dbname = src_project_config["variables"]["database"]
-        src_homepath = src_project_config["variables"]["home_path"]
+    @staticmethod
+    def help() -> None:
+        log.info('do map current - показать ключевую информацию из текущего config.yml')
+        log.info('do map check_config - показать ключевую информацию из указанного yml-файла описания проекта')
+        log.info('do map set - переключиться на проект, описаный в указанном yml-файла')
+        log.info('do map generate_empty_project_config - создать заготовку для файла описания проекта')
+        log.info('do map create_project - создать новый проект: новую БД, хранилище документов, принять пакет разработки, \
+инициализировать его и принять стандартные шаблоны')
+        log.info('do map clone_project - клонировать проект (сделать копии БД и домашнего каталога)')
+        log.info('do map export_devpack - выгрузить пакет разработки')
+        log.info('do map build_distributions - сформировать дистрибутивы решения')
+        log.info('do map generate_empty_distributions_config - сформировать пустой конфиг с описанием дистрибутивов решения')
+        log.info('do map clear_log - удалить старые логи')
 
-        if src_sungero_config["common_config"]["DATABASE_ENGINE"] == 'postgres':
-            raise AssertionError(f'В этой команде PostgreSQL не поддерживается.')
-        if not Path(src_homepath).is_dir():
-            raise AssertionError(f'Исходный домашний каталог "{src_homepath}" не существует.')
-        if not is_database_exists(self.config, src_dbname):
-            raise AssertionError(f'Исходная база данных "{src_dbname}" не существует.')
-
-        dst_project_config = yaml_tools.load_yaml_from_file(dst_project_config_path)
-        dst_sungero_config = _update_sungero_config(dst_project_config_path, self.config_path)
-        dst_dbname = dst_project_config["variables"]["database"]
-        dst_homepath = dst_project_config["variables"]["home_path"]
-        if Path(dst_homepath).is_dir():
-            raise AssertionError(f'Целевой домашний каталог "{dst_homepath}" уже существует.')
-        if is_database_exists(self.config, dst_dbname):
-            raise AssertionError(f'Целевая база данных "{dst_dbname}" уже существует.')
-
-        while (True):
-
-            print(f'БД-источник: {src_project_config["variables"]["database"]}')
-            print(f'БД-приемник: {dst_project_config["variables"]["database"]}')
-
-            log.info(Bold(f'Параметры клонирования проекта:'))
-            log.info(f'database: {_colorize(src_dbname)} -> {_colorize(dst_dbname)}')
-            log.info(f'homepath: {_colorize(src_homepath)} -> {_colorize(dst_homepath)}')
-
-            answ = input("Клонировать проект? (y,n):") if confirm else 'y'
-            if answ=='y' or answ=='Y':
-                # Сделать копию БД
-                log.info(_colorize(f'Создание резеврной копии базы данных {src_dbname}'))
-                create_database_backup(self.config, src_dbname)
-                # Восстановить БД
-                # костыль - создаем модель псевдотенант, т.к. create_database_from_backup требует тип TenantModel
-                log.info(_colorize(f'Восстановление БД {dst_dbname}'))
-                tenant_model = TenantModel({'db': dst_dbname})
-                create_database_from_backup(self.config, src_dbname, tenant_model)
-                # Сделать копию домашнего каталога проекта
-                log.info(_colorize(f'Копирование домашнего каталога {src_homepath} {dst_homepath}'))
-                shutil.copytree(src_homepath, dst_homepath)
-                # переключить проект
-                self.set(dst_project_config_path)
-                break
-            elif answ=='n' or answ=='N':
-                break
+    #endregion
