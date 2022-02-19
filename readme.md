@@ -14,6 +14,13 @@
 
 ## Установка компоненты
 
+Установить можно двумя способами:
+
+1. Как компоненту Directum Launcher (рекомендуемый вариант)
+2. Как plugin Directum Launcher (для продвинутых)
+
+### Установка как компоненты Directum Launcher
+
 1. Скачайте ManageAppProjects.zip из https://github.com/DirectumCompany/rx-manage-applied-projects/releases.
 
 2. Перейдите в папку Directum Launcher и выполните команду:
@@ -27,6 +34,20 @@
 ```
 do.bat components delete map
 ```
+
+### Установка как plugin Directum Launcher
+
+1. Клонируйте репозиторий компоненты:
+
+   ```git clone https://github.com/DirectumCompany/rx-manage-applied-projects```
+
+2. Перейдите в папку Directum Launcher и выполните команду
+
+```
+do.bat install_plugin <путь к репозиторию>\src\ManageAppProjects\map_plugin\
+```
+
+Чтобы обновить компоненту, установленную таким образом достаточно вытянуть из репозитория обновления.
 
 ## Управление прикладными проектами
 
