@@ -30,6 +30,17 @@ MANAGE_APPLIED_PROJECTS_ALIAS = 'map'
 
 #region service function
 
+def _get_rx_version(need_short: bool = True) -> str:
+    """Вернуть версию RX
+    """
+    manifest = yaml_tools.load_yaml_from_file(_get_check_file_path("etc\\_builds\\version.txt"))
+    version = manifest["builds"]["platform_builds"]["version"]
+    if need_short:
+        v = version.split(".")
+        version = f'{v[0]}.{v[1]}'
+    return version
+
+
 def _copy_database_mssql(config: Config, src_db_name: str, dst_db_name: str) -> None:
     """Создать копию базы данных на Microsoft SQL Server.
 
@@ -676,6 +687,17 @@ distributions:
         """ Показать параметры текущего проекта """
         _show_config(self.config_path)
 
+    def rx_version(self) -> None:
+        """Показать версию RX"""
+        ver = _get_rx_version()
+        log.info(f'Platform_builds: {ver}')
+
+    def url(self) -> None:
+        """Показать url для открытия веб-клиента текущего инстанса"""
+        vars = self.config.variables
+        srv_cfgs = self.config.services_config
+        log.info(f'{vars["protocol"]}://{vars["host_fqdn"]}:{vars["http_port"]}/{srv_cfgs["SungeroWebServer"]["WEB_HOST_PATH_BASE"]}/#')
+
     def check_config(self, config_path: str) -> None:
         """ Показать содержимое указанного файла описания проекта
 
@@ -697,5 +719,6 @@ distributions:
         log.info('do map build_distributions - сформировать дистрибутивы решения')
         log.info('do map generate_empty_distributions_config - сформировать пустой конфиг с описанием дистрибутивов решения')
         log.info('do map clear_log - удалить старые логи')
+        log.info('do map url - показать url для подключения к веб-клиенту текущего инстанса')
 
     #endregion
