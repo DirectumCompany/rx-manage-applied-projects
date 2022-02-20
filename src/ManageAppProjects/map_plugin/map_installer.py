@@ -10,6 +10,7 @@ import pprint
 import shutil
 from pathlib import PurePath, Path
 import os
+import sys
 
 from fire.formatting import Bold
 
@@ -242,7 +243,7 @@ class ManageAppliedProject(BaseComponent):
 
     #region manage projects
 
-    def create_project(self, project_config_path: str, package_path:str, need_import_src:bool = False, confirm: bool = True) -> None:
+    def create_project(self, project_config_path: str, package_path:str = "", need_import_src:bool = False, confirm: bool = True) -> None:
         """ Создать новый прикладной проект (эксперементальная фича).
         Будет создана БД, в неё будет принят пакет разработки и стандратные шаблоны.
 
@@ -258,13 +259,6 @@ class ManageAppliedProject(BaseComponent):
             * если делать при загрузке - то модули-зависимости могут не успеть подгрузиться
             * DDS и DirectumRX может не быть не установлены и надо об этом сообщать
             """
-            import sys
-            if 'dds_plugin.development_studio' in sys.modules:
-                from dds_plugin.development_studio import DevelopmentStudio
-            else:
-                log.error('Не найден модуль dds_plugin.development_studio')
-                raise RuntimeError('Не найден модуль dds_plugin.development_studio')
-
             if 'sungero_deploy.tools.rxcmd' in sys.modules:
                 from sungero_deploy.tools.rxcmd import RxCmd
             elif 'rx_plugin.rxcmd' in sys.modules:
@@ -300,27 +294,40 @@ class ManageAppliedProject(BaseComponent):
                 all2.config_up()
                 all2.up()
 
-                # обновить конфиг DDS
-                log.info(_colorize("Обновление конфига DDS"))
-                DevelopmentStudio(self.config_path).generate_config_settings()
-
                 # принять пакет разработки в БД
                 log.info(_colorize("Ожидание загрузки сервисов"))
                 time.sleep(30) #подождать, когда сервисы загрузятся - без этого возникает ошибка
-                log.info(_colorize("Прием пакета разработки"))
-                DeploymentTool(self.config_path).deploy(package = package_path, init = True)
-
-                # импортировать шаблоны
-                log.info(_colorize("Ожидание загрузки сервисов"))
-                time.sleep(30) #подождать, когда сервисы загрузятся - без этого возникает ошибка
-                log.info(_colorize("Импорт шаблонов"))
-                RxCmd(get_config_model(self.config_path)).import_templates()
-
-                # принять пакет разработки с исходниками
-                if need_import_src:
+                if package_path != "":
                     log.info(_colorize("Прием пакета разработки"))
-                    time.sleep(30) #подождать, когда сервисы загрузятся
-                    DevelopmentStudio(self.config_path).run(f'--import-package {package_path}')
+                    DeploymentTool(self.config_path).deploy(package = package_path, init = True)
+
+                    # импортировать шаблоны
+                    log.info(_colorize("Ожидание загрузки сервисов"))
+                    time.sleep(30) #подождать, когда сервисы загрузятся - без этого возникает ошибка
+                    log.info(_colorize("Импорт шаблонов"))
+                    RxCmd(get_config_model(self.config_path)).import_templates()
+
+                # обновить конфиги DevelopmentStudio и DeploymentToolUI
+                # Подгрузка модулей выполняется именно тут, т.к:
+                #   * если делать при загрузке - то модули-зависимости могут не успеть подгрузиться
+                #   * DevelopmentStudio может не быть не установлены и надо об этом сообщать
+                log.info(_colorize("Обновление конфига DevelopmentStudio"))
+                if 'dds_plugin.development_studio' in sys.modules:
+                    from dds_plugin.development_studio import DevelopmentStudio
+                    DevelopmentStudio(self.config_path).generate_config_settings()
+                    # принять пакет разработки с исходниками
+                    if need_import_src:
+                        log.info(_colorize("Прием пакета разработки"))
+                        time.sleep(30) #подождать, когда сервисы загрузятся
+                        DevelopmentStudio(self.config_path).run(f'--import-package {package_path}')
+                else:
+                    log.warning('Модуль development_studio plugin-а dds_plugin для компоненты DevelopmentStudio не найден.')
+                log.info(_colorize("Обновление конфига DeploymentToolUI"))
+                if 'dt_ui_plugin.deployment_tool_ui' in sys.modules:
+                    from dt_ui_plugin.deployment_tool_ui import DeploymentToolUI
+                    DeploymentToolUI(self.config_path).generate_config_settings()
+                else:
+                    log.warning('Модуль deployment_tool_ui plugin-а dt_ui_plugin для компоненты DeploymentToolUI не найден.')
 
                 log.info("")
                 log.info(_colorize("Новые параметры:"))
@@ -363,20 +370,22 @@ class ManageAppliedProject(BaseComponent):
                 all2.config_up()
                 all2.up()
 
-                # обновить конфиг DDS
-                log.info(_colorize("Обновление конфига DDS"))
-                """Подгрузить модуль DDS.
-                Выполняется именно тут, т.к:
-                * если делать при загрузке - то модули-зависимости могут не успеть подгрузиться
-                * DDS может не быть не установлены и надо об этом сообщать
-                """
-                import sys
+                # обновить конфиги DevelopmentStudio и DeploymentToolUI
+                # Подгрузка модулей выполняется именно тут, т.к:
+                #   * если делать при загрузке - то модули-зависимости могут не успеть подгрузиться
+                #   * DevelopmentStudio может не быть не установлены и надо об этом сообщать
+                log.info(_colorize("Обновление конфига DevelopmentStudio"))
                 if 'dds_plugin.development_studio' in sys.modules:
                     from dds_plugin.development_studio import DevelopmentStudio
+                    DevelopmentStudio(self.config_path).generate_config_settings()
                 else:
-                    log.error('Не найден модуль dds_plugin.development_studio')
-                    raise RuntimeError('Не найден модуль dds_plugin.development_studio')
-                DevelopmentStudio(self.config_path).generate_config_settings()
+                    log.warning('Модуль development_studio plugin-а dds_plugin для компоненты DevelopmentStudio не найден.')
+                log.info(_colorize("Обновление конфига DeploymentToolUI"))
+                if 'dt_ui_plugin.deployment_tool_ui' in sys.modules:
+                    from dt_ui_plugin.deployment_tool_ui import DeploymentToolUI
+                    DeploymentToolUI(self.config_path).generate_config_settings()
+                else:
+                    log.warning('Модуль deployment_tool_ui plugin-а dt_ui_plugin для компоненты DeploymentToolUI не найден.')
 
                 log.info("")
                 log.info(_colorize("Новые параметры:"))
