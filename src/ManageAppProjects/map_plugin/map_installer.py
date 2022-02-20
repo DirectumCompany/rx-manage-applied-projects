@@ -294,17 +294,18 @@ class ManageAppliedProject(BaseComponent):
                 all2 = All(get_config_model(self.config_path))
                 all2.config_up()
                 all2.up()
+                all2.check()
 
                 # принять пакет разработки в БД
-                log.info(_colorize("Ожидание загрузки сервисов"))
-                time.sleep(30) #подождать, когда сервисы загрузятся - без этого возникает ошибка
                 if package_path != "":
                     log.info(_colorize("Прием пакета разработки"))
                     DeploymentTool(self.config_path).deploy(package = package_path, init = True)
 
                     # импортировать шаблоны
-                    log.info(_colorize("Ожидание загрузки сервисов"))
-                    time.sleep(30) #подождать, когда сервисы загрузятся - без этого возникает ошибка
+                    log.info(_colorize("Перезапуск сервисов"))
+                    all2.down()
+                    all2.up()
+                    all2.check()
                     log.info(_colorize("Импорт шаблонов"))
                     RxCmd(get_config_model(self.config_path)).import_templates()
 
@@ -370,6 +371,7 @@ class ManageAppliedProject(BaseComponent):
                 all2 = All(get_config_model(self.config_path))
                 all2.config_up()
                 all2.up()
+                all2.check()
 
                 # обновить конфиги DevelopmentStudio и DeploymentToolUI
                 # Подгрузка модулей выполняется именно тут, т.к:
