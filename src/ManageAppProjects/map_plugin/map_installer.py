@@ -3,7 +3,7 @@
 from asyncore import write
 import pathlib
 from pprint import pprint
-from typing import Optional, Dict, Any
+from typing import Optional, Dict, Any, List
 import termcolor
 import time
 import pprint
@@ -26,6 +26,7 @@ from sungero_deploy.tools.sungerodb import SungeroDB
 from py_common import io_tools, process
 from sungero_tenants.dbtools import get_database_folder, ENABLE_XP_CMDSHELL
 from sungero_deploy.scripts_config import Config
+from common_plugin import git_tools
 
 MANAGE_APPLIED_PROJECTS_ALIAS = 'map'
 
@@ -715,6 +716,39 @@ distributions:
         """
         _show_config(config_path)
 
+    def repos(self) -> None:
+        """Показать состояние репозиториев - текущая ветка и кратко состояние файлов"""
+        if "DevelopmentStudio" in self.config.services_config:
+            root_src = self.config.services_config["DevelopmentStudio"]["GIT_ROOT_DIRECTORY"]
+            log.info("")
+            log.info("Состояние репозиториев:")
+            for r  in self.config.services_config["DevelopmentStudio"]["REPOSITORIES"]["repository"]:
+                folder = r["@folderName"]
+                path = str(PurePath(root_src, folder))
+                stdout_messages: List[str] = ['']
+                result = git_tools.git_run("branch --show-current", cwd=path, silent=True, log_stdout=False,
+                                filter=process.save_stdout_message_handler(stdout_messages))
+                if result == 0:
+                    branch = stdout_messages.pop()
+
+                    stdout_messages_f: List[str] = []
+                    result = git_tools.git_run("status -s",
+                                    cwd=path,
+                                    filter=process.save_stdout_message_handler(stdout_messages_f),
+                                    log_stdout=False)
+                    if result == 0:
+                        changes_dict = {}
+                        for m in stdout_messages_f:
+                            t = m.split(" ")[0]
+                            changes_dict[t] = changes_dict.get(t, 0)+1
+                        changes = ""
+                        for k,v in changes_dict.items():
+                            if len(changes) == 0:
+                                changes = f'{k}:{v}'
+                            else:
+                                changes = f'{changes}, {k}:{v}'
+                        log.info(f' {path} ({_colorize(branch)}) {changes}')
+
     @staticmethod
     def help() -> None:
         log.info('do map current - показать ключевую информацию из текущего config.yml')
@@ -729,5 +763,6 @@ distributions:
         log.info('do map generate_empty_distributions_config - сформировать пустой конфиг с описанием дистрибутивов решения')
         log.info('do map clear_log - удалить старые логи')
         log.info('do map url - показать url для подключения к веб-клиенту текущего инстанса')
+        log.info('do map repo - показать краткую сводку по текущему состоянию репозиториев')
 
     #endregion

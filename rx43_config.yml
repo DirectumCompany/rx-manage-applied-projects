@@ -165,7 +165,7 @@ services_config:
         UNIQUE_NAMES_IN_OVERRIDES: true
         LOCAL_WEB_PROTOCOL: 'http'
         LOCAL_SERVER_HTTP_PORT: '{{ http_port }}'
-        GIT_ROOT_DIRECTORY: '{{ home_path }}/git_repository'
+        GIT_ROOT_DIRECTORY: '{{ home_path_src }}'
         REPOSITORIES:
             repository:
             -   '@folderName': 'Work'
