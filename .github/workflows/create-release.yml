@@ -1,4 +1,4 @@
-name: create-release
+name: release-1
 
 on: 
   push:
@@ -44,7 +44,7 @@ jobs:
       - name: Create zip
         uses: papeloto/action-zip@v1
         with:
-          files: src/ManageAppProjects readme.md
+          files: src/ManageAppProjects readme.md rx42_config.yml rx43_config.yml
           dest: ManageAppProjects.zip
           recursive: true
       - name: Upload release.zip
@@ -52,6 +52,17 @@ jobs:
         with:
           name: release_bin
           path: ManageAppProjects.zip
+      - name: Create examples zip
+        uses: papeloto/action-zip@v1
+        with:
+          files: example
+          dest: example.zip
+          recursive: true
+      - name: Upload example.zip
+        uses: actions/upload-artifact@v2
+        with:
+          name: release_example
+          path: example.zip
 
   publish:
     runs-on: ubuntu-latest
@@ -67,10 +78,16 @@ jobs:
         uses: actions/download-artifact@v2
         with:
           name: release_bin
+      - name: Download example.zip
+        uses: actions/download-artifact@v2
+        with:
+          name: release_example
       - name: Publish
         uses: softprops/action-gh-release@v1
         with:
-          files: "ManageAppProjects.zip"
+          files: |
+            ManageAppProjects.zip
+            example.zip
           body_path: CHANGELOG.md
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
