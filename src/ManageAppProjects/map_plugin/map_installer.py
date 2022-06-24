@@ -132,17 +132,12 @@ def _copy_database_postgresql(src_sungero_config: Any, src_db_name: str, dst_db_
         src_db_name: исходная БД.
         dst_db_name: целевая БД.
     """
-    manage_applied_projects_config = src_sungero_config.get("manage_applied_projects", None)
-    if manage_applied_projects_config == None:
-        raise AssertionError('В config.yml отсутствует раздел "manage_applied_projects"')
-    postgree_path = manage_applied_projects_config.get("postgresql_bin", None)
-    if postgree_path == None:
-        raise AssertionError('В config.yml отсутствует параметр manage_applied_projects -> postgresql_bin"')
-    cmd = f'"{postgree_path}\\createdb.exe" -w {dst_dbname}'
+    postgree_path = _get_map_settings(config=src_sungero_config, param_name="postgresql_bin", is_required=True)
+    cmd = f'"{postgree_path}\\createdb.exe" -w {dst_db_name}'
     exit_code = process.try_execute(cmd, encoding='cp1251') #cp1251  utf-8
     if exit_code != 0:
         raise IOError(f'Ошибка при создании БД')
-    cmd = f'"{postgree_path}\\pg_dump.exe" -h localhost -w {src_dbname} | "{postgree_path}\\psql" -q -h localhost -w {dst_dbname}'
+    cmd = f'"{postgree_path}\\pg_dump.exe" -h localhost -w {src_db_name} | "{postgree_path}\\psql" -q -h localhost -w {dst_db_name}'
     exit_code = process.try_execute(cmd, encoding='cp1251')
     if exit_code != 0:
         raise IOError(f'Ошибка при копировании данных БД')
@@ -197,10 +192,10 @@ def _generate_empty_config_by_template(new_config_path: str, template_config: st
 def _update_sungero_config(project_config_path, sungero_config_path):
     """Преобразовать текущий config.yml в соотвтетствии с указанным конфигом проекта.
     Преобразование выполняется без сохранения на диске
-    
+
     Args:
         * project_config_path - путь к конфигу проекта
-    
+
     Return:
         * преоразованный конфиг
     """
@@ -212,6 +207,58 @@ def _update_sungero_config(project_config_path, sungero_config_path):
     dst_config["variables"]["home_path"] = src_config["variables"]["home_path"]
     dst_config["variables"]["home_path_src"]  = src_config["variables"]["home_path_src"]
     return dst_config
+
+def _get_map_settings(config_path: str = None, config: Any = None, param_name: str = None, is_required: bool = False, default_value: Any = None) -> Any:
+    """Получить значение параметра компоненты Manage Applied Projects из config.yml
+
+    Args:
+        config_path: str - путь к конфигу
+        config: str - сам конфиг. config_path и config - взаимоисключающие параметры, config имеет приоритет
+        param_name: str - имя параметра
+        is_required: bool = False - если True, то при отсутствии параметра в config.yml будет выброшено исключение
+        default_value: Any = None - значение по умолчанию. Если is_required=False и параметра нет в config.yml, то вернется default_value
+    """
+    if config is None:
+        if config_path is not None:
+            config = yaml_tools.load_yaml_from_file(_get_check_file_path(config_path)) #get_config_model(config_path)
+        else:
+            raise AssertionError('Должен быть либо указан параметр config, либо config_path')
+    if "manage_applied_projects" in config:
+        manage_applied_projects_config = config.get("manage_applied_projects", None)
+        if param_name in manage_applied_projects_config:
+            return manage_applied_projects_config.get(param_name)
+        else:
+            if is_required:
+                raise AssertionError(f'В config.yml отсутствует параметр manage_applied_projects -> {param_name}')
+            else:
+                return default_value
+    else:
+        print(5)
+        if is_required:
+            raise AssertionError('В config.yml отсутствует раздел "manage_applied_projects"')
+        else:
+            return default_value
+
+def _run_dds(config_path: str, need_run: bool, confirm: bool) -> None:
+    """Запустить DDS, если попросили об этом (параметр need_run) или в конфиге настроен запуск по умолчанию.
+    Если явно попросили запустить DDS, а он не установлен, то DDS не будет запущен, а в log выведется сообщение.
+    Если параметр confirm установлен в True, то перед запуском DDS будет выведен запрос на подтверждение запуска.
+    """
+    if need_run or (need_run is None and _get_map_settings(config_path=config_path,
+                                                            param_name="run_dds_after_set_project",
+                                                            is_required=False, default_value=False)):
+        if 'dds_plugin.development_studio' in sys.modules:
+            from dds_plugin.development_studio import DevelopmentStudio
+            while (True):
+                answ = input("Запустить DDS? (y,n):") if confirm else 'y'
+                if answ=='y' or answ=='Y':
+                    DevelopmentStudio(config_path).run()
+                    break
+                elif answ=='n' or answ=='N':
+                    break
+        else:
+            log.warning(f'Компонента Directum Development Studio не установлена.')
+
 #endregion
 
 @component(alias=MANAGE_APPLIED_PROJECTS_ALIAS)
@@ -244,7 +291,7 @@ class ManageAppliedProject(BaseComponent):
 
     #region manage projects
 
-    def create_project(self, project_config_path: str, package_path:str = "", need_import_src:bool = False, confirm: bool = True) -> None:
+    def create_project(self, project_config_path: str, package_path:str = "", need_import_src:bool = False, confirm: bool = True, rundds: bool = None) -> None:
         """ Создать новый прикладной проект (эксперементальная фича).
         Будет создана БД, в неё будет принят пакет разработки и стандратные шаблоны.
 
@@ -253,6 +300,7 @@ class ManageAppliedProject(BaseComponent):
             package_path: путь к пакету разработки, который должен содержать бинарники
             need_import_src: признак необходимости принять исходники из указанного пакета разработки. По умолчанию - False
             confirm: признак необходимости выводить запрос на создание проекта. По умолчанию - True
+            rundds: признак необходимости запускать DDS. По умолчанию - None, т.е. будет браться значение, определенное в config.yml
         """
         while (True):
             """Подгрузить необходимые модули.
@@ -334,16 +382,21 @@ class ManageAppliedProject(BaseComponent):
                 log.info("")
                 log.info(_colorize("Новые параметры:"))
                 self.current()
+
+                # запустить DDS
+                _run_dds(self.config_path, rundds, confirm)
+
                 break
             elif answ=='n' or answ=='N':
                 break
 
-    def set(self, project_config_path: str, confirm: bool = True) -> None:
+    def set(self, project_config_path: str, confirm: bool = True, rundds: bool = None) -> None:
         """ Переключиться на указанный прикладной проект
 
         Args:
             project_config_path: путь к файлу с описанием проекта
             confirm: признак необходимости выводить запрос на создание проекта. По умолчанию - True
+            rundds: признак необходимости запускать DDS. По умолчанию - None, т.е. будет браться значение, определенное в config.yml
         """
         while (True):
             _show_config(project_config_path)
@@ -393,6 +446,10 @@ class ManageAppliedProject(BaseComponent):
                 log.info("")
                 log.info(_colorize("Новые параметры:"))
                 self.current()
+
+                # запустить DDS
+                _run_dds(self.config_path, rundds, confirm)
+
                 break
             elif answ=='n' or answ=='N':
                 break
@@ -428,7 +485,7 @@ services_config:
 """
         _generate_empty_config_by_template(new_config_path, template_config)
 
-    def clone_project(self, src_project_config_path: str, dst_project_config_path: str, confirm: bool = True) -> None:
+    def clone_project(self, src_project_config_path: str, dst_project_config_path: str, confirm: bool = True, rundds: bool = None) -> None:
         """ Сделать копию прикладного проекта (эксперементальная фича).
         Будет сделана копия БД и домашнего каталога проекта.
 
@@ -436,6 +493,7 @@ services_config:
             src_project_config_path: путь к файлу с описанием проекта-источника
             dst_project_config_path: путь к файлу с описанием проекта, в который надо скопировать
             confirm: признак необходимости выводить запрос на создание проекта. По умолчанию - True
+            rundds: признак необходимости запускать DDS. По умолчанию - None, т.е. будет браться значение, определенное в config.yml
         """
         sungero_db = SungeroDB(get_config_model(self.config_path))
 
@@ -476,14 +534,14 @@ services_config:
                 shutil.copytree(src_homepath, dst_homepath)
                 # переключить проект
                 log.info("")
-                self.set(dst_project_config_path, confirm)
+                self.set(dst_project_config_path, confirm, rundds)
                 break
             elif answ=='n' or answ=='N':
                 break
 
     #endregion
 
-    #region manage distriobution
+    #region manage distribution
     def build_distributions(self, distriputions_config_path: str, destination_folder: str,
                             repo_folder: str, increment_version: bool = True) -> int:
         """Построить дистрибутивы проекта
@@ -669,7 +727,7 @@ distributions:
 
     #endregion
 
-    #region other 
+    #region other
     def clear_log(self, root_logs: str = None, limit_day: int = 3) -> None:
         """Удалить старые логи. Чистит в root_logs и в подкаталогах.
         Предполагается, что последние символы имени файла лога - YYYY-MM-DD.log
