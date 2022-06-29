@@ -1,12 +1,10 @@
 # coding: utf-8
 """ Модуль плагина для управления прикладными проектами  """
-from asyncore import write
 import pathlib
-from pprint import pprint
+from pprint import pprint, pformat
 from typing import Optional, Dict, Any, List
 import termcolor
 import time
-import pprint
 import shutil
 from pathlib import PurePath, Path
 import os
@@ -24,7 +22,7 @@ from sungero_deploy.static_controller import StaticController
 from sungero_deploy.scripts_config import get_config_model
 from sungero_deploy.tools.sungerodb import SungeroDB
 from py_common import io_tools, process
-from sungero_tenants.dbtools import get_database_folder, ENABLE_XP_CMDSHELL
+from sungero_tenants.dbtools import ENABLE_XP_CMDSHELL
 from sungero_deploy.scripts_config import Config
 from common_plugin import git_tools
 
@@ -52,7 +50,23 @@ def _copy_database_mssql(config: Config, src_db_name: str, dst_db_name: str) -> 
         dst_db_name: целевая БД.
     """
     log.info(f'Create database backup: "{src_db_name}".')
-    database_folder = get_database_folder(config, src_db_name)
+
+    # найти каталог для резервных копий
+    # в DirectumLauncher 4.4 изменилось имя функции, поэтому пробуем оба варианта
+    database_folder = None
+    try:
+        from sungero_tenants.dbtools import get_mssql_database_folder
+        database_folder = get_mssql_database_folder(config, src_db_name)
+    except:
+        pass
+    try:
+        from sungero_tenants.dbtools import get_database_folder
+        database_folder = get_database_folder(config, src_db_name)
+    except:
+        pass
+    if database_folder is None:
+        raise ValueError(f"Не удалось найти функцию для получения имени каталога резервных копий.")
+
     command_text = f"""
         -- ============ копипаста из dbtools.create_database_backup() ============
         declare @DatabaseName sysname = '{src_db_name}'
@@ -265,6 +279,7 @@ def _run_dds(config_path: str, need_run: bool, confirm: bool) -> None:
 class ManageAppliedProject(BaseComponent):
     """ Компонент Изменение проекта. """
 
+    #region constructor-destructor
     def __init__(self, config_path: Optional[str] = None) -> None:
         """
         Конструктор.
@@ -288,6 +303,7 @@ class ManageAppliedProject(BaseComponent):
         """
         log.info(f'"{self.__class__.__name__}" component has been successfully uninstalled.')
         self._print_help_after_action()
+    #endregion
 
     #region manage projects
 
