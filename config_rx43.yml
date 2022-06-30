@@ -26,10 +26,6 @@ builds:
     platform_builds:
         version: # auto
         path: '{{ local_builds_path }}/PlatformBuilds'
-    # Билды прикладной
-    applied_builds:
-        version: # auto
-        path: '{{ local_builds_path }}/DirectumRX'
     # Билды DBConverter
     dbconverter_builds:
         version: # auto
@@ -59,7 +55,7 @@ common_config: &base
     AUTHENTICATION_USERNAME: 'Service User'
     AUTHENTICATION_PASSWORD: '11111'
     HYPERLINK_SERVER: 'http://{{ host_fqdn }}:{{ http_port }}/Sungero'
-    MONGODB_CONNECTION_STRING: '...строка_коннекта_к_mongodb...'
+    MONGODB_CONNECTION_STRING: 'mongodb://<...user...>:<...password...>@<...HOST_IP...>:27017'
     LANGUAGE: 'ru-ru'
     LOG_LANGUAGE: 'ru-ru'
 
@@ -132,6 +128,12 @@ services_config:
     LogService:
         <<: *base
         PORT: # auto
+    SungeroHaproxy:
+        haproxy_config: 'etc\haproxy.cfg'
+        # Путь к файлу сертификата в формате PEM
+        ssl_cert: ''
+        http_port: '{{ http_port }}'
+        https_port: '{{ https_port }}'
     IIS:
         site_name: 'DirectumRX Web Site'
         http_port: '{{ http_port }}'
@@ -148,14 +150,19 @@ services_config:
         SERVER_HTTP_PORT: '{{ http_port }}'
         SERVER_ROOT: '{{ host_fqdn }}'
         WEB_PROTOCOL: '{{ protocol }}'
-    RxCmd:
-        <<: *logs
-        INTEGRATION_SERVICE_URL: # auto
+    DeploymentToolUI:
+        <<: *base
+        WEB_RELATIVE_PATH: 'Client'
+        SERVER_HTTPS_PORT: '{{ https_port }}'
+        SERVER_HTTP_PORT: '{{ http_port }}'
+        SERVER_ROOT: '{{ host_fqdn }}'
+        WEB_PROTOCOL: '{{ protocol }}'
     DevelopmentStudio:
         <<: *base
         COMPANY_CODE: '...код_компании_разработчика...'
         SYSTEM_NAME: 'Develop'
         LOCAL_WEB_RELATIVE_PATH: 'Client'
+        UNIQUE_NAMES_IN_OVERRIDES: true
         LOCAL_WEB_PROTOCOL: 'http'
         LOCAL_SERVER_HTTP_PORT: '{{ http_port }}'
         GIT_ROOT_DIRECTORY: '{{ home_path_src }}'
@@ -164,17 +171,11 @@ services_config:
             -   '@folderName': 'Work'
                 '@solutionType': 'Work'
                 '@url': ''
-            -   '@folderName': 'Base'
+            -   '@folderName': 'Box'
                 '@solutionType': 'Base'
                 '@url': ''
         SERVICE_RUNNER_CONFIG_PATH: '...корневой_каталог_инстсов_rx...\{{ instance_name }}\etc\_{{ instance_name }}\_services_config\ServiceRunner\_ConfigSettings.xml'
-    DeploymentToolUI:
-        <<: *base
-        WEB_RELATIVE_PATH: 'Client'
-        SERVER_HTTPS_PORT: '{{ https_port }}'
-        SERVER_HTTP_PORT: '{{ http_port }}'
-        SERVER_ROOT: '{{ host_fqdn }}'
-        WEB_PROTOCOL: '{{ protocol }}'
 
 manage_applied_projects:
     postgresql_bin: 'C:\Program Files\PostgreSQL\14\bin'
+    run_dds_after_set_project: 'true'

@@ -474,7 +474,7 @@ class ManageAppliedProject(BaseComponent):
         """ Создать новый файл с описанием проекта
 
         Args:
-            new_config_path - путь к файлу, который нужно создать
+            new_config_path: путь к файлу, который нужно создать
         """
         template_config="""# ключевые параметры проекта
 variables:
@@ -558,26 +558,27 @@ services_config:
     #endregion
 
     #region manage distribution
-    def build_distributions(self, distriputions_config_path: str, destination_folder: str,
+    def build_distributions(self, distributions_config_path: str, destination_folder: str,
                             repo_folder: str, increment_version: bool = True) -> int:
-        """Построить дистрибутивы проекта
+        """ Построить дистрибутивы проекта
 
         Args:
-        * distriputions_config_path - путь к yml-файл, в котором описаны дистрибутивы, которые нужно собрать
-        * destination_folder - папка, в которой будет создага папка с номером версии, внутри которой будут подготовлены дистрибутивы
-        * repo_folder - путь к локальному репозиторию, дистрибутивы которого надо собрать
+            distributions_config_path: путь к yml-файл, в котором описаны дистрибутивы, которые нужно собрать
+            destination_folder: папка, в которой будет создага папка с номером версии, внутри которой будут подготовлены дистрибутивы
+            repo_folder: путь к локальному репозиторию, дистрибутивы которого надо собрать
+            increment_version: признак необходимости увеличить номер версии решения после сборки дистрибутива
         """
         try:
             # Проверить переданные параметры
-            if not Path(distriputions_config_path).is_file():
-                raise FileNotFoundError(f'Не найдет конфиг описания дистрибутивов проекта {distriputions_config_path}')
+            if not Path(distributions_config_path).is_file():
+                raise FileNotFoundError(f'Не найдет конфиг описания дистрибутивов проекта {distributions_config_path}')
             if not Path(destination_folder).is_dir():
                 raise FileNotFoundError(f'Не найдет каталог назначения {destination_folder}')
             if not Path(PurePath(repo_folder)).is_dir():
                 raise FileNotFoundError(f'Не найдет каталог назначения {repo_folder}')
 
             # загрузить конфиг с описанием дистрибутивов
-            distr_config = yaml_tools.load_yaml_from_file(distriputions_config_path)
+            distr_config = yaml_tools.load_yaml_from_file(distributions_config_path)
 
             # достать номер номер версии и инициализиовать папку версии в папке назначения
             mtd_for_version = PurePath(repo_folder, distr_config["mtd_for_version"])
@@ -672,11 +673,10 @@ services_config:
         """Экспортировать пакет разработки
 
         Args:
-            * devpack_config_name - имя XML-файла с конфигурацией пакета разработки. Задает параметр --configuration
-            * devpack_file_name - путь к создаваемому файлу с пакетом разработки. Задает параметр --development-package
-            * increment_version - признак, который определяет нужно увеличивать номер версии модулей и решений или нет.
-            Задает параметр --increment-version. Если указано значение None - то не передается при вызове DDS
-            * set_version - номер версии, который надо устаноить. Задает параметр --set-version. . Если указано значение None - то не передается при вызове DDS
+            devpack_config_name: имя XML-файла с конфигурацией пакета разработки. Задает параметр --configuration
+            devpack_file_name: путь к создаваемому файлу с пакетом разработки. Задает параметр --development-package
+            increment_version: признак, который определяет нужно увеличивать номер версии модулей и решений или нет.
+            set_version: номер версии, который надо установить. Задает параметр --set-version. . Если указано значение None - то не передается при вызове DDS
         """
         inc_ver_param = ""
         if increment_version is not None:
@@ -703,7 +703,7 @@ services_config:
         """ Создать новый файл с описанием дистрибутивов проекта
 
         Args:
-            new_config_path - путь к файлу, который нужно создать
+            new_config_path: путь к файлу, который нужно создать
         """
         template_config="""# Название проекта
 project: ''
@@ -749,8 +749,8 @@ distributions:
         Предполагается, что последние символы имени файла лога - YYYY-MM-DD.log
 
         Args:
-            * root_logs - корневой каталог репозитория. Если не указан, то будут чиститься логи сервисов текущего instance
-            * limit_day - за сколько последних дней оставить логи. По умолчанию - 3.
+            root_logs: корневой каталог репозитория. Если не указан, то будут чиститься логи сервисов текущего instance
+            limit_day: за сколько последних дней оставить логи. По умолчанию - 3. Если указать 0 - будут удалены все логи.
         """
         if root_logs is None:
             log_folders = []
@@ -774,7 +774,7 @@ distributions:
         _show_config(self.config_path)
 
     def rx_version(self) -> None:
-        """Показать версию RX"""
+        """Показать версию Sungero"""
         ver = _get_rx_version()
         log.info(f'Platform_builds: {ver}')
 
@@ -827,18 +827,20 @@ distributions:
 
     @staticmethod
     def help() -> None:
-        log.info('do map current - показать ключевую информацию из текущего config.yml')
-        log.info('do map check_config - показать ключевую информацию из указанного yml-файла описания проекта')
         log.info('do map set - переключиться на проект, описаный в указанном yml-файла')
         log.info('do map generate_empty_project_config - создать заготовку для файла описания проекта')
         log.info('do map create_project - создать новый проект: новую БД, хранилище документов, принять пакет разработки, \
 инициализировать его и принять стандартные шаблоны')
         log.info('do map clone_project - клонировать проект (сделать копии БД и домашнего каталога)')
-        log.info('do map export_devpack - выгрузить пакет разработки')
+
         log.info('do map build_distributions - сформировать дистрибутивы решения')
+        log.info('do map export_devpack - выгрузить пакет разработки')
         log.info('do map generate_empty_distributions_config - сформировать пустой конфиг с описанием дистрибутивов решения')
         log.info('do map clear_log - удалить старые логи')
+        log.info('do map current - показать ключевую информацию из текущего config.yml')
+        log.info('do map rx_version - показать версию Sungero')
         log.info('do map url - показать url для подключения к веб-клиенту текущего инстанса')
-        log.info('do map repo - показать краткую сводку по текущему состоянию репозиториев')
+        log.info('do map check_config - показать ключевую информацию из указанного yml-файла описания проекта')
+        log.info('do map repos - показать краткую сводку по текущему состоянию репозиториев')
 
     #endregion

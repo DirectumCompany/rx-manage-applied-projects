@@ -18,19 +18,27 @@ variables:
     protocol: 'http'
 
 
-# Пути и версии до сборок (билдов) продукта.
-# Версия может быть не указана или указана частично. Если версия не указана - берётся последняя.
-# В предопределенной переменной {{ local_builds_path }} хранится путь до локальный билдов "./etc/_builds/"
+# Paths to product builds and product build versions.
+# A version can be specified partially or not specified at all. If the version is not specified, it is determined as the last one.
+# Predetermined variable {{ local_builds_path }} contains the path to the local builds "./etc/_builds/"
 builds:
-    # Билды платформы
+    # Platform bulds
     platform_builds:
         version: # auto
         path: '{{ local_builds_path }}/PlatformBuilds'
-    # Билды DBConverter
+    # DBConverter builds
     dbconverter_builds:
         version: # auto
         path: '{{ local_builds_path }}/DBConverter'
-    # Билды распространяемых пакетов
+    # Encryptor builds
+    encryptor_builds:
+        version: # auto
+        path: '{{ local_builds_path }}/Encryptor'
+    # CertificateTool builds
+    certificate_tool_builds:
+        version: # auto
+        path: '{{ local_builds_path }}/CertificateTool'
+    # Redistributable package builds
     redist_builds:
         version: # auto
         path: '{{ local_builds_path }}/Redist'
@@ -38,8 +46,8 @@ logs_path: &logs
     LOGS_PATH: 'C:\rx_logs\{{ instance_name }}'
 common_config: &base
     <<: *logs
-    # Идентификатор системы. Выдается при первой поставке системы, используется для генерации штрихкодов.
-    # Обязательно должен быть задан при первой установке.
+    # Unique identifier of the system. It is issued upon the first system delivery and used in barcode generation.
+    # The parameter value must be specified within the first installation.
     PRIMARY_TENANT: 'Local'
     QUEUE_CONNECTION_STRING: 'virtualhost=...виртуальный_хост...;hostname=...имя_сервера...;port=5672;username=...логин...;password=...пароль...;Exchange=RX42_Exchange_{{ instance_name }}'
     # mssql
@@ -55,12 +63,12 @@ common_config: &base
     AUTHENTICATION_USERNAME: 'Service User'
     AUTHENTICATION_PASSWORD: '11111'
     HYPERLINK_SERVER: 'http://{{ host_fqdn }}:{{ http_port }}/Sungero'
-    MONGODB_CONNECTION_STRING: '...строка_коннекта_к_mongodb...'
+    MONGODB_CONNECTION_STRING: 'mongodb://<...user...>:<...password...>@<...HOST_IP...>:27017'
     LANGUAGE: 'ru-ru'
     LOG_LANGUAGE: 'ru-ru'
 
-# Настройки сервисов и утилит.
-# all up использует состав и порядок сервисов из этой секции (без учёта сторонних сервисов - RabbitMQ, Redis, MongoDB)
+# Parameters of services and utilities.
+# Command "all up" launches the services from the section below in the order they are listed, excluding third-party services such as RabbitMQ, Redis, and MongoDB.
 services_config:
     SungeroWebServer: &SungeroWebServer
         <<: *base
@@ -108,19 +116,19 @@ services_config:
         CENTRIFUGO_API_URI: # auto
         CENTRIFUGO_API_KEY: '...ключ_доступа_к_api_centrifugo...'
     SungeroCentrifugo:
-        # Включает использование поля 'offset' клиент-серверного протокола. Рекомендуется оставить включённой
+        # Enables the "offset" field for the client-server protocol. We recommend you to leave this parameter enabled.
         'v3_use_offset': true
-        # Ключ для доступа к API. Значение копируется из ConfigSettings сервиса CCS
+        # Access key for the Centrifugo API.  the Directum RX installation. It must be the same as the value of the CENTRIFUGO_API_KEY parameter of the Client Connections Service.
         'api_key': '...ключ_доступа_к_api_centrifugo...'
-        # Порт для всех конечных точек (endpoint'ов). Значение копируется из ConfigSettings сервиса CCS
+        # Port for all endpoints. The port number must be the same as in the Centrifugo address specified in the CENTRIFUGO_API_URI parameter of the Client Connections Service.
         'port': # auto
-        # Проксирование авторизации. Адрес конечной точки. По умолчанию http://clientsconnectionservice:15672/authorize
+        # Authorization proxy endpoint. The default value is http://clientsconnectionservice:15672/authorize
         'proxy_connect_endpoint': #auto
-        # Проксирование авторизации. Таймаут в секундах
+        # Timeout for authorization proxying (in seconds).
         'proxy_connect_timeout': 5
-        # Серверная подписка на приватный канал пользователя
+        # Server subscription to a personal user channel.
         'user_subscribe_to_personal': true
-        # Секрет для генерации токенов
+        # Token generation secret.
         #'admin_secret': ''
     IntegrationService:
         <<: *base
@@ -130,13 +138,15 @@ services_config:
         PORT: # auto
     SungeroHaproxy:
         haproxy_config: 'etc\haproxy.cfg'
-        # Путь к файлу сертификата в формате PEM
+        # Path to the PEM certificate file.
         ssl_cert: ''
         http_port: '{{ http_port }}'
         https_port: '{{ https_port }}'
     IIS:
         site_name: 'DirectumRX Web Site'
         http_port: '{{ http_port }}'
+        https_port: '{{ https_port }}'
+        ssl_cert_thumbprint: ''
     ServiceRunner:
         <<: *logs
         CONFIGS_PATH:  # auto
@@ -144,7 +154,7 @@ services_config:
         PACKAGES_BIN_PATH: # auto
         SERVICE_RUNNER_PORT: # auto
     DeploymentTool:
-        <<: *base
+        <<: *logs
         WEB_RELATIVE_PATH: 'Client'
         SERVER_HTTPS_PORT: '{{ https_port }}'
         SERVER_HTTP_PORT: '{{ http_port }}'
@@ -175,3 +185,7 @@ services_config:
                 '@solutionType': 'Base'
                 '@url': ''
         SERVICE_RUNNER_CONFIG_PATH: '...корневой_каталог_инстсов_rx...\{{ instance_name }}\etc\_{{ instance_name }}\_services_config\ServiceRunner\_ConfigSettings.xml'
+
+manage_applied_projects:
+    postgresql_bin: 'C:\Program Files\PostgreSQL\14\bin'
+    run_dds_after_set_project: 'true'
