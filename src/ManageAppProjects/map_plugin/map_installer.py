@@ -59,11 +59,12 @@ def _copy_database_mssql(config: Config, src_db_name: str, dst_db_name: str) -> 
         database_folder = get_mssql_database_folder(config, src_db_name)
     except:
         pass
-    try:
-        from sungero_tenants.dbtools import get_database_folder
-        database_folder = get_database_folder(config, src_db_name)
-    except:
-        pass
+    if database_folder is None:
+        try:
+            from sungero_tenants.dbtools import get_database_folder
+            database_folder = get_database_folder(config, src_db_name)
+        except:
+            pass
     if database_folder is None:
         raise ValueError(f"Не удалось найти функцию для получения имени каталога резервных копий.")
 
