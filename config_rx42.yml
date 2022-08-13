@@ -167,7 +167,7 @@ services_config:
             -   '@folderName': 'Base'
                 '@solutionType': 'Base'
                 '@url': ''
-        SERVICE_RUNNER_CONFIG_PATH: '...корневой_каталог_инстсов_rx...\{{ instance_name }}\etc\_{{ instance_name }}\_services_config\ServiceRunner\_ConfigSettings.xml'
+        SERVICE_RUNNER_CONFIG_PATH: '...корневой_каталог_инстанса_rx...\etc\_{{ instance_name }}\_services_config\ServiceRunner\_ConfigSettings.xml'
     DeploymentToolUI:
         <<: *base
         WEB_RELATIVE_PATH: 'Client'
