@@ -210,6 +210,7 @@ def _update_sungero_config(project_config_path, sungero_config_path):
 
     Args:
         * project_config_path - путь к конфигу проекта
+        * sungero_config_path - путь к config.yml
 
     Return:
         * преоразованный конфиг
@@ -556,6 +557,55 @@ services_config:
             elif answ=='n' or answ=='N':
                 break
 
+    def dds_wo_deploy(self, project_config_path: str) -> None:
+        """ Запустить DDS для просмотра/редактирования исходников проекта без фактического переключения на него.
+        При этом блокируется возможность публикации, чтобы не сломать текущий проект.
+
+        Args:
+            project_config_path: путь к файлу с описанием проекта, чьи исходники требуется открыть
+         """
+        if 'dds_plugin.development_studio' in sys.modules:
+            # подготовить временные файлы для временных config.yml и _ConfigSettings.xml
+            import tempfile
+            dst_config_file_descriptor = tempfile.mkstemp(prefix="map_config_", suffix=".yml")
+            config_settings_file_descriptor = tempfile.mkstemp(prefix="map_ConfigSettings_", suffix=".xml")
+            os.close(dst_config_file_descriptor[0])
+            os.close(config_settings_file_descriptor[0])
+            dst_config_path = dst_config_file_descriptor[1]
+            config_settings_file_name = config_settings_file_descriptor[1]
+            log.info(f"Создан файл для временного config.yml: {dst_config_path}")
+            log.info(f"Создан файл для временного _ConfigSettings.xml: {config_settings_file_name}")
+
+            # подготовить специальный config.yml с проектом, чьи исходники надо открыть
+            src_config = yaml_tools.load_yaml_from_file(project_config_path)
+            dst_config = yaml_tools.load_yaml_from_file(self.config_path)
+            dst_config["services_config"]["DevelopmentStudio"]['REPOSITORIES']["repository"]  = src_config["services_config"]["DevelopmentStudio"]['REPOSITORIES']["repository"].copy()
+            dst_config["variables"]["purpose"] = src_config["variables"]["purpose"]
+            dst_config["variables"]["database"] = src_config["variables"]["database"]
+            dst_config["variables"]["home_path"] = src_config["variables"]["home_path"]
+            dst_config["variables"]["home_path_src"]  = src_config["variables"]["home_path_src"]
+            # отключить возможность публикации
+            dst_config["services_config"]["DevelopmentStudio"]["LOCAL_WEB_RELATIVE_PATH"] = ""
+            dst_config["services_config"]["DevelopmentStudio"]["LOCAL_SERVER_HTTP_PORT"] = ""
+            dst_config["services_config"]["DevelopmentStudio"]["SERVICE_RUNNER_CONFIG_PATH"] = ""
+            yaml_tools.yaml_dump_to_file(dst_config, dst_config_path)
+
+            # подготовить специальный _ConfigSettings.xml для DDS
+            from dds_plugin.development_studio import DevelopmentStudio
+            from sungero_deploy.services_config import generate_service_config, get_default_tool_host_values_mapping
+            dds = DevelopmentStudio(dst_config_path)
+            generate_service_config(config_settings_file_name, get_config_model(dst_config_path), dds.instance_service,
+                                get_default_tool_host_values_mapping())
+
+            # запустить dds со специальным _ConfigSettings.xml
+            cmd = f'"{dds._get_exe_path()}" --multi-instance --settings {config_settings_file_name}'
+            exit_code = process.try_execute(cmd, encoding='cp1251')
+
+            # удалить файлы с временными конфигами
+            log.info("Удаление файлов временных конфигов.")
+            os.remove(dst_config_path)
+            os.remove(config_settings_file_name)
+
     #endregion
 
     #region manage distribution
@@ -833,6 +883,7 @@ distributions:
         log.info('do map create_project - создать новый проект: новую БД, хранилище документов, принять пакет разработки, \
 инициализировать его и принять стандартные шаблоны')
         log.info('do map clone_project - клонировать проект (сделать копии БД и домашнего каталога)')
+        log.info('do map dds_wo_deploy - запустить DevelopmentStudio для просмотра/редактирования исходников указанного проекта без возможности публикации')
 
         log.info('do map build_distributions - сформировать дистрибутивы решения')
         log.info('do map export_devpack - выгрузить пакет разработки')
