@@ -169,6 +169,8 @@ def _show_config(config_path):
         if maxlen < len(repo.get("@folderName")):
             maxlen = len(repo.get("@folderName"))
     log.info(Bold(f'Назначение:    {vars.get("purpose")}'))
+    if vars.get("project_config_path") is not None:
+        log.info(f'project_config_path:      {_colorize(vars.get("project_config_path"))}')
     log.info(f'database:      {_colorize(vars.get("database"))}')
     log.info(f'home_path:     {_colorize(vars.get("home_path"))}')
     log.info(f'home_path_src: {_colorize(vars.get("home_path_src"))}')
@@ -222,6 +224,7 @@ def _update_sungero_config(project_config_path, sungero_config_path):
     dst_config["variables"]["database"] = src_config["variables"]["database"]
     dst_config["variables"]["home_path"] = src_config["variables"]["home_path"]
     dst_config["variables"]["home_path_src"]  = src_config["variables"]["home_path_src"]
+    dst_config["variables"]["project_config_path"]  = project_config_path
     return dst_config
 
 def _get_map_settings(config_path: str = None, config: Any = None, param_name: str = None, is_required: bool = False, default_value: Any = None) -> Any:
@@ -434,6 +437,7 @@ class ManageAppliedProject(BaseComponent):
                 dst_config["variables"]["database"] = src_config["variables"]["database"]
                 dst_config["variables"]["home_path"] = src_config["variables"]["home_path"]
                 dst_config["variables"]["home_path_src"]  = src_config["variables"]["home_path_src"]
+                dst_config["variables"]["project_config_path"]  = project_config_path
                 yaml_tools.yaml_dump_to_file(dst_config, self.config_path)
                 time.sleep(2)
 
