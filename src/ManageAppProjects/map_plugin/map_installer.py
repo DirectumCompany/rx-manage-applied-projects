@@ -17,14 +17,24 @@ from components.component_manager import component
 from py_common.logger import log
 from common_plugin import yaml_tools
 from sungero_deploy.all import All
-from sungero_deploy.deployment_tool import DeploymentTool
-from sungero_deploy.static_controller import StaticController
 from sungero_deploy.scripts_config import get_config_model
 from sungero_deploy.tools.sungerodb import SungeroDB
 from py_common import io_tools, process
-from sungero_tenants.dbtools import ENABLE_XP_CMDSHELL
 from sungero_deploy.scripts_config import Config
 from common_plugin import git_tools
+
+if 'platform_plugin.sungero_tenants.dbtools' in sys.modules:
+    from platform_plugin.sungero_tenants.dbtools import ENABLE_XP_CMDSHELL # 4.5
+else:
+    from sungero_tenants.dbtools import ENABLE_XP_CMDSHELL # 4.2-4.4
+if 'platform_plugin.deployment_tool' in sys.modules:
+    from platform_plugin.deployment_tool import DeploymentTool # 4.5
+else:
+    from sungero_deploy.deployment_tool import DeploymentTool # 4.2-4.4
+if 'platform_plugin.static_controller' in sys.modules:
+    from platform_plugin.static_controller import StaticController # 4.5
+else:
+    from sungero_deploy.static_controller import StaticController  # 4.2-4.4
 
 MANAGE_APPLIED_PROJECTS_ALIAS = 'map'
 
@@ -55,14 +65,23 @@ def _copy_database_mssql(config: Config, src_db_name: str, dst_db_name: str) -> 
     # в DirectumLauncher 4.4 изменилось имя функции, поэтому пробуем оба варианта
     database_folder = None
     try:
+        # версия 4.4
         from sungero_tenants.dbtools import get_mssql_database_folder
         database_folder = get_mssql_database_folder(config, src_db_name)
     except:
         pass
     if database_folder is None:
         try:
+            # до версии 4.4
             from sungero_tenants.dbtools import get_database_folder
             database_folder = get_database_folder(config, src_db_name)
+        except:
+            pass
+    if database_folder is None:
+        try:
+            # версия 4.5
+            from platform_plugin.sungero_tenants.dbtools import get_mssql_database_folder
+            database_folder = get_mssql_database_folder(config, src_db_name)
         except:
             pass
     if database_folder is None:
