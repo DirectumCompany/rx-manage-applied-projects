@@ -9,6 +9,7 @@ import shutil
 from pathlib import PurePath, Path
 import os
 import sys
+import json
 
 from fire.formatting import Bold
 
@@ -43,12 +44,16 @@ MANAGE_APPLIED_PROJECTS_ALIAS = 'map'
 def _get_rx_version(need_short: bool = True) -> str:
     """Вернуть версию RX
     """
-    manifest = yaml_tools.load_yaml_from_file(_get_check_file_path("etc\\_builds\\version.txt"))
-    version = manifest["builds"]["platform_builds"]["version"]
-    if need_short:
-        v = version.split(".")
-        version = f'{v[0]}.{v[1]}'
-    return version
+    # версия 4.2. Информация о билде прикладной хранится в version.txt
+    version_dict = yaml_tools.load_yaml_from_file(_get_check_file_path("etc\\_builds\\version.txt"))
+    applied_builds_version = version_dict["builds"].get("applied_builds", None)
+    if applied_builds_version is not None:
+        return applied_builds_version["version"]
+
+    with open(_get_check_file_path("etc\\_builds\\DirectumRX\\manifest.json"),  'r', encoding='utf-8') as manifest_json:
+        data = " ".join(manifest_json.readlines())
+        manifest_dict = json.loads(data)
+        return manifest_dict["version"]
 
 
 def _copy_database_mssql(config: Config, src_db_name: str, dst_db_name: str) -> None:
@@ -848,9 +853,9 @@ distributions:
         _show_config(self.config_path)
 
     def rx_version(self) -> None:
-        """Показать версию Sungero"""
+        """Показать версию RX"""
         ver = _get_rx_version()
-        log.info(f'Platform_builds: {ver}')
+        log.info(f'Directum RX: {ver}')
 
     def url(self) -> None:
         """Показать url для открытия веб-клиента текущего инстанса"""
