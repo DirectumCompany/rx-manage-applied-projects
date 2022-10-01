@@ -2,7 +2,7 @@
 """ Модуль плагина для управления прикладными проектами  """
 import pathlib
 from pprint import pprint, pformat
-from typing import Optional, Dict, Any, List
+from typing import Optional, Dict, Any, List, OrderedDict
 import termcolor
 import time
 import shutil
@@ -10,6 +10,7 @@ from pathlib import PurePath, Path
 import os
 import sys
 import json
+from ruamel.yaml import CommentedMap
 
 from fire.formatting import Bold
 
@@ -181,8 +182,14 @@ def _copy_database_postgresql(src_sungero_config: Any, src_db_name: str, dst_db_
     if exit_code != 0:
         raise IOError(f'Ошибка при копировании данных БД')
 
-def _colorize(x):
-    return termcolor.colored(x, color="green", attrs=["bold"])
+def _colorize(x, color, attrs):
+    return termcolor.colored(x, color=color, attrs=attrs)
+def _colorize_green(x):
+    return _colorize(x, color="green", attrs=["bold"])
+def _colorize_red(x):
+    return _colorize(x, color="red", attrs=["bold"])
+def _colorize_cyan(x):
+    return _colorize(x, color="cyan", attrs=["bold"])
 
 def _show_config(config_path):
     config = yaml_tools.load_yaml_from_file(_get_check_file_path(config_path))
@@ -194,13 +201,13 @@ def _show_config(config_path):
             maxlen = len(repo.get("@folderName"))
     log.info(Bold(f'Назначение:    {vars.get("purpose")}'))
     if vars.get("project_config_path") is not None:
-        log.info(f'project_config_path:      {_colorize(vars.get("project_config_path"))}')
-    log.info(f'database:      {_colorize(vars.get("database"))}')
-    log.info(f'home_path:     {_colorize(vars.get("home_path"))}')
-    log.info(f'home_path_src: {_colorize(vars.get("home_path_src"))}')
+        log.info(f'project_config_path:      {_colorize_green(vars.get("project_config_path"))}')
+    log.info(f'database:      {_colorize_green(vars.get("database"))}')
+    log.info(f'home_path:     {_colorize_green(vars.get("home_path"))}')
+    log.info(f'home_path_src: {_colorize_green(vars.get("home_path_src"))}')
     log.info('repositories:')
     for repo in repos:
-        log.info(f'  folder: {_colorize(repo.get("@folderName").ljust(maxlen)):} solutiontype: {_colorize(repo.get("@solutionType"))}  url: {_colorize(repo.get("@url"))}')
+        log.info(f'  folder: {_colorize_green(repo.get("@folderName").ljust(maxlen)):} solutiontype: {_colorize_green(repo.get("@solutionType"))}  url: {_colorize_green(repo.get("@url"))}')
 
 def _get_check_file_path(config_path: str) -> Path:
     if not config_path:
@@ -226,7 +233,7 @@ def _generate_empty_config_by_template(new_config_path: str, template_config: st
     if not p_config_path.exists():
         with open(new_config_path, 'w', encoding='utf-8') as f:
             f.write(template_config)
-        log.info(_colorize(f'Создан файл {new_config_path}.'))
+        log.info(_colorize_green(f'Создан файл {new_config_path}.'))
     else:
         log.error(f'Файл {new_config_path} уже существует.')
 
@@ -336,6 +343,63 @@ class ManageAppliedProject(BaseComponent):
 
     #region manage projects
 
+    def update_config(self, template_config_path: str, confirm: bool = True):
+        """ Изменить config.yml используя шаблон
+
+        Args:
+            template_config_path - путь к конфигу, из которого будут браться новые значения
+            confirm: признак необходимости выводить запрос на создание проекта. По умолчанию - True
+        """
+        inst_path = Path(self.config_path).parent.parent
+        log.info(f'Корневой каталог текущего инстанса: {str(inst_path)}')
+
+        def _update_CommentedMap(template_config: CommentedMap, dst_config: CommentedMap):
+            for k,v in template_config.items():
+                if type(v) == CommentedMap:
+                    if k in dst_config.keys():
+                        _update_CommentedMap(v, dst_config[k])
+                    else:
+                        dst_config[k] = v
+                        _update_CommentedMap(v, dst_config[k])
+                else:
+                    dst_config[k] = v
+
+        def _show_CommentedMap(template_config: CommentedMap, dst_config: CommentedMap, indent: int = 1):
+            indent_template = "  "
+            for k,v in template_config.items():
+                if type(v) == CommentedMap:
+                    if dst_config is not None and k in dst_config.keys():
+                        log.info(f'{(indent)*indent_template}{k}')
+                        _show_CommentedMap(v, dst_config[k], (indent+1))
+                    else:
+                        log.info(f"{(indent)*indent_template}{_colorize_green('[+]')}{k}:")
+                        _show_CommentedMap(v, None, (indent+1))
+                else:
+                    if dst_config is not None and k in dst_config.keys():
+                        if v == dst_config[k]:
+                            log.info(f"{(indent)*indent_template}[.]{k}: '{v}'")
+                        else:
+                            log.info(f"{(indent)*indent_template}{_colorize_cyan('[*]')}{k}: '{dst_config[k]}' -> '{v}'")
+                    else:
+                        log.info(f"{(indent)*indent_template}{_colorize_green('[+]')}{k}: '{v}'")
+
+        log.info(f'Чтение исходного config.yml: {self.config_path}')
+        dst_config = yaml_tools.load_yaml_from_file(self.config_path)
+        log.info(f'Чтение файла с требуемыми параметрами: {template_config_path}')
+        template_config = yaml_tools.load_yaml_from_file(_get_check_file_path(template_config_path))
+
+        log.info(f'{_colorize_green("Предлагаемые изменения config.yml")}')
+        log.info(f'Легенда изменений:')
+        log.info(f'{_colorize_cyan("  [*] - значение будет изменено")}')
+        log.info(f'{_colorize_green("  [+] - значение будет добавлено")}')
+        log.info(f'  [.] - текущее значение и предлагаемое совпадают')
+        log.info(f'config.yml:')
+        _show_CommentedMap(template_config, dst_config)
+        answ = input("Изменить config.yml? (y,n):") if confirm else 'y'
+        if answ=='y' or answ=='Y':
+            _update_CommentedMap(template_config, dst_config)
+            yaml_tools.yaml_dump_to_file(dst_config, self.config_path)
+
     def create_project(self, project_config_path: str, package_path:str = "", need_import_src:bool = False, confirm: bool = True, rundds: bool = None) -> None:
         """ Создать новый прикладной проект (эксперементальная фича).
         Будет создана БД, в неё будет принят пакет разработки и стандратные шаблоны.
@@ -365,25 +429,25 @@ class ManageAppliedProject(BaseComponent):
             answ = input("Создать новый проект? (y,n):") if confirm else 'y'
             if answ=='y' or answ=='Y':
                 # остановить сервисы
-                log.info(_colorize("Остановка сервисов"))
+                log.info(_colorize_green("Остановка сервисов"))
                 all = All(self.config)
                 all.down()
 
                 # скорректировать etc\config.yml
-                log.info(_colorize("Корректировка config.yml"))
+                log.info(_colorize_green("Корректировка config.yml"))
                 dst_config = _update_sungero_config(project_config_path, self.config_path)
                 yaml_tools.yaml_dump_to_file(dst_config, self.config_path)
                 time.sleep(2)
 
                 # создать БД
-                log.info(_colorize("Создать БД"))
+                log.info(_colorize_green("Создать БД"))
                 exitcode = SungeroDB(get_config_model(self.config_path)).up()
                 if exitcode == -1:
                     log.error(f'Ошибка при создании БД')
                     return
 
                 # поднять сервисы
-                log.info(_colorize("Подъем сервисов"))
+                log.info(_colorize_green("Подъем сервисов"))
                 all2 = All(get_config_model(self.config_path))
                 all2.config_up()
                 all2.up()
@@ -391,33 +455,33 @@ class ManageAppliedProject(BaseComponent):
 
                 # принять пакет разработки в БД
                 if package_path != "":
-                    log.info(_colorize("Прием пакета разработки"))
+                    log.info(_colorize_green("Прием пакета разработки"))
                     DeploymentTool(self.config_path).deploy(package = package_path, init = True)
 
                     # импортировать шаблоны
-                    log.info(_colorize("Перезапуск сервисов"))
+                    log.info(_colorize_green("Перезапуск сервисов"))
                     all2.down()
                     all2.up()
                     all2.check()
-                    log.info(_colorize("Импорт шаблонов"))
+                    log.info(_colorize_green("Импорт шаблонов"))
                     RxCmd(get_config_model(self.config_path)).import_templates()
 
                 # обновить конфиги DevelopmentStudio и DeploymentToolUI
                 # Подгрузка модулей выполняется именно тут, т.к:
                 #   * если делать при загрузке - то модули-зависимости могут не успеть подгрузиться
                 #   * DevelopmentStudio может не быть не установлены и надо об этом сообщать
-                log.info(_colorize("Обновление конфига DevelopmentStudio"))
+                log.info(_colorize_green("Обновление конфига DevelopmentStudio"))
                 if 'dds_plugin.development_studio' in sys.modules:
                     from dds_plugin.development_studio import DevelopmentStudio
                     DevelopmentStudio(self.config_path).generate_config_settings()
                     # принять пакет разработки с исходниками
                     if need_import_src:
-                        log.info(_colorize("Прием пакета разработки"))
+                        log.info(_colorize_green("Прием пакета разработки"))
                         time.sleep(30) #подождать, когда сервисы загрузятся
                         DevelopmentStudio(self.config_path).run(f'--import-package {package_path}')
                 else:
                     log.warning('Модуль development_studio plugin-а dds_plugin для компоненты DevelopmentStudio не найден.')
-                log.info(_colorize("Обновление конфига DeploymentToolUI"))
+                log.info(_colorize_green("Обновление конфига DeploymentToolUI"))
                 if 'dt_ui_plugin.deployment_tool_ui' in sys.modules:
                     from dt_ui_plugin.deployment_tool_ui import DeploymentToolUI
                     DeploymentToolUI(self.config_path).generate_config_settings()
@@ -425,7 +489,7 @@ class ManageAppliedProject(BaseComponent):
                     log.warning('Модуль deployment_tool_ui plugin-а dt_ui_plugin для компоненты DeploymentToolUI не найден.')
 
                 log.info("")
-                log.info(_colorize("Новые параметры:"))
+                log.info(_colorize_green("Новые параметры:"))
                 self.current()
 
                 # запустить DDS
@@ -448,12 +512,12 @@ class ManageAppliedProject(BaseComponent):
             answ = input("Переключиться на указанный проект? (y,n):") if confirm else 'y'
             if answ=='y' or answ=='Y':
                 # остановить сервисы
-                log.info(_colorize("Остановка сервисов"))
+                log.info(_colorize_green("Остановка сервисов"))
                 all = All(self.config)
                 all.down()
 
                 # скорректировать etc\config.yml
-                log.info(_colorize("Корректировка config.yml"))
+                log.info(_colorize_green("Корректировка config.yml"))
                 src_config = yaml_tools.load_yaml_from_file(project_config_path)
                 dst_config = yaml_tools.load_yaml_from_file(self.config_path)
                 dst_config["services_config"]["DevelopmentStudio"]['REPOSITORIES']["repository"]  = src_config["services_config"]["DevelopmentStudio"]['REPOSITORIES']["repository"].copy()
@@ -466,7 +530,7 @@ class ManageAppliedProject(BaseComponent):
                 time.sleep(2)
 
                 # поднять сервисы
-                log.info(_colorize("Подъем сервисов"))
+                log.info(_colorize_green("Подъем сервисов"))
                 all2 = All(get_config_model(self.config_path))
                 all2.config_up()
                 all2.up()
@@ -476,13 +540,13 @@ class ManageAppliedProject(BaseComponent):
                 # Подгрузка модулей выполняется именно тут, т.к:
                 #   * если делать при загрузке - то модули-зависимости могут не успеть подгрузиться
                 #   * DevelopmentStudio может не быть не установлены и надо об этом сообщать
-                log.info(_colorize("Обновление конфига DevelopmentStudio"))
+                log.info(_colorize_green("Обновление конфига DevelopmentStudio"))
                 if 'dds_plugin.development_studio' in sys.modules:
                     from dds_plugin.development_studio import DevelopmentStudio
                     DevelopmentStudio(self.config_path).generate_config_settings()
                 else:
                     log.warning('Модуль development_studio plugin-а dds_plugin для компоненты DevelopmentStudio не найден.')
-                log.info(_colorize("Обновление конфига DeploymentToolUI"))
+                log.info(_colorize_green("Обновление конфига DeploymentToolUI"))
                 if 'dt_ui_plugin.deployment_tool_ui' in sys.modules:
                     from dt_ui_plugin.deployment_tool_ui import DeploymentToolUI
                     DeploymentToolUI(self.config_path).generate_config_settings()
@@ -490,7 +554,7 @@ class ManageAppliedProject(BaseComponent):
                     log.warning('Модуль deployment_tool_ui plugin-а dt_ui_plugin для компоненты DeploymentToolUI не найден.')
 
                 log.info("")
-                log.info(_colorize("Новые параметры:"))
+                log.info(_colorize_green("Новые параметры:"))
                 self.current()
 
                 # запустить DDS
@@ -564,19 +628,19 @@ services_config:
         while (True):
             log.info('')
             log.info(Bold(f'Параметры клонирования проекта:'))
-            log.info(f'database: {_colorize(src_dbname)} -> {_colorize(dst_dbname)}')
-            log.info(f'homepath: {_colorize(src_homepath)} -> {_colorize(dst_homepath)}')
+            log.info(f'database: {_colorize_green(src_dbname)} -> {_colorize_green(dst_dbname)}')
+            log.info(f'homepath: {_colorize_green(src_homepath)} -> {_colorize_green(dst_homepath)}')
 
             answ = input("Клонировать проект? (y,n):") if confirm else 'y'
             if answ=='y' or answ=='Y':
                 # Копирование БД
-                log.info(_colorize(f'Копирование базы данных {src_dbname} в {dst_dbname}'))
+                log.info(_colorize_green(f'Копирование базы данных {src_dbname} в {dst_dbname}'))
                 if datadase_engine == 'mssql':
                     _copy_database_mssql(self.config, src_dbname, dst_dbname)
                 else:
                     _copy_database_postgresql(src_sungero_config, src_dbname, dst_dbname)
                 # Сделать копию домашнего каталога проекта
-                log.info(_colorize(f'Копирование домашнего каталога {src_homepath} {dst_homepath}'))
+                log.info(_colorize_green(f'Копирование домашнего каталога {src_homepath} {dst_homepath}'))
                 shutil.copytree(src_homepath, dst_homepath)
                 # переключить проект
                 log.info("")
@@ -665,7 +729,7 @@ services_config:
                 raise FileNotFoundError(f'Не найдет mtd-файл для получения версии решения {mtd_for_version}')
             mtd = yaml_tools.load_yaml_from_file(mtd_for_version)
             version = mtd["Version"]
-            log.info(_colorize(f'Номер версии {version}'))
+            log.info(_colorize_green(f'Номер версии {version}'))
             version_folder = PurePath(destination_folder, version)
             io_tools._create_or_clean_dir(version_folder)
 
@@ -675,7 +739,7 @@ services_config:
             readme_strings.append(f'Версия: {version}')
             readme_strings.append(f'Варианты дистрибутивов: ')
             for distr in distr_config["distributions"]:
-                log.info(_colorize(f'Обработка дистрибутива {distr["id"]}'))
+                log.info(_colorize_green(f'Обработка дистрибутива {distr["id"]}'))
                 readme_strings.append(f'* {distr["folder_name"]} - {distr["comment"]}')
                 readme_strings.append("")
 
@@ -696,7 +760,7 @@ services_config:
                         if f["src"] != "":
                             src = _get_full_path(repo_folder, f["src"])
                             dst = PurePath(distr_folder, f["dst"])
-                            log.info(_colorize(f'  Копирование {src} -> {dst}'))
+                            log.info(_colorize_green(f'  Копирование {src} -> {dst}'))
                             if Path(src).is_file():
                                 shutil.copy(str(src), str(dst))
                             elif Path(src).is_dir():
@@ -709,7 +773,7 @@ services_config:
                         if f["src"] != "":
                             src = _get_full_path(repo_folder, f["src"])
                             dst = PurePath(distr_folder, f["dst"])
-                            log.info(_colorize(f'  Копирование {src} -> {dst}'))
+                            log.info(_colorize_green(f'  Копирование {src} -> {dst}'))
                             if Path(src).is_file():
                                 shutil.copy(str(src), str(dst))
                             elif Path(src).is_dir():
@@ -719,7 +783,7 @@ services_config:
                 # создать архивы дистрибутивов
                 if distr["zip_name"] != "":
                     zip_name = str(PurePath(version_folder, f'{distr["zip_name"]} v.{version}.zip'))
-                    log.info(_colorize(f'Создать архив {zip_name}'))
+                    log.info(_colorize_green(f'Создать архив {zip_name}'))
                     io_tools.create_archive(zip_name, distr_folder)
 
             # сформировать readme.md для версии
@@ -729,7 +793,7 @@ services_config:
             # увеличить номер версии, сформировав и удалив указанные пакеты разработки
             if increment_version:
                 if distr_config["devpacks_for_increment_version"] is not None:
-                    log.info(_colorize('Увеличить номер версии решения'))
+                    log.info(_colorize_green('Увеличить номер версии решения'))
                     for devpack in distr_config["devpacks_for_increment_version"]:
                         devpack_config = _get_full_path(repo_folder, devpack["config"])
                         if Path(devpack_config).is_file():
@@ -902,7 +966,7 @@ distributions:
                                 changes = f'{k}:{v}'
                             else:
                                 changes = f'{changes}, {k}:{v}'
-                        log.info(f' {path} ({_colorize(branch)}) {changes}')
+                        log.info(f' {path} ({_colorize_green(branch)}) {changes}')
 
     @staticmethod
     def help() -> None:
@@ -910,6 +974,7 @@ distributions:
         log.info('do map generate_empty_project_config - создать заготовку для файла описания проекта')
         log.info('do map create_project - создать новый проект: новую БД, хранилище документов, принять пакет разработки, \
 инициализировать его и принять стандартные шаблоны')
+        log.info('do map update_config - изменить параметры в config.yml взяв значения из переданного файла')
         log.info('do map clone_project - клонировать проект (сделать копии БД и домашнего каталога)')
         log.info('do map dds_wo_deploy - запустить DevelopmentStudio для просмотра/редактирования исходников указанного проекта без возможности публикации')
 
