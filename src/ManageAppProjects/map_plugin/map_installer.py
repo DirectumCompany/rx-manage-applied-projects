@@ -407,7 +407,7 @@ class ManageAppliedProject(BaseComponent):
                             value = f"'{dst_config[k]}' -> '{v}'"
                     else:
                         mark = _colorize_green('[+]')
-                        value = v
+                        value = f"'{v}'"
                     log.info(f"{(indent)*indent_template}{mark}{k}: {value}")
 
         log.info(f'Чтение исходного config.yml: {self.config_path}')
