@@ -10,7 +10,7 @@ from pathlib import PurePath, Path
 import os
 import sys
 import json
-from ruamel.yaml import CommentedMap
+from ruamel.yaml import CommentedMap, CommentedSeq
 
 from fire.formatting import Bold
 
@@ -357,7 +357,16 @@ class ManageAppliedProject(BaseComponent):
             for k,v in template_config.items():
                 if type(v) == CommentedMap:
                     if k in dst_config.keys():
+                        if dst_config[k] is not None:
+                            _update_CommentedMap(v, dst_config[k])
+                        else:
+                            dst_config[k] = v
+                    else:
+                        dst_config[k] = v
                         _update_CommentedMap(v, dst_config[k])
+                elif type(v) == CommentedSeq:
+                    if k in dst_config.keys():
+                        dst_config[k] = v
                     else:
                         dst_config[k] = v
                         _update_CommentedMap(v, dst_config[k])
@@ -366,22 +375,40 @@ class ManageAppliedProject(BaseComponent):
 
         def _show_CommentedMap(template_config: CommentedMap, dst_config: CommentedMap, indent: int = 1):
             indent_template = "  "
+            mark = ""
             for k,v in template_config.items():
                 if type(v) == CommentedMap:
+                    dst_config_next_level = None
                     if dst_config is not None and k in dst_config.keys():
-                        log.info(f'{(indent)*indent_template}{k}')
-                        _show_CommentedMap(v, dst_config[k], (indent+1))
+                        mark = ""
+                        dst_config_next_level = dst_config[k]
                     else:
-                        log.info(f"{(indent)*indent_template}{_colorize_green('[+]')}{k}:")
-                        _show_CommentedMap(v, None, (indent+1))
+                        mark = _colorize_green('[+]')
+                    log.info(f"{(indent)*indent_template}{mark}{k}:")
+                    _show_CommentedMap(v, dst_config_next_level, (indent+1))
+                elif type(v) == CommentedSeq:
+                    if k.lower() == "repository":
+                        maxlen = 0
+                        for repo in v:
+                            if maxlen < len(repo.get("@folderName")):
+                                maxlen = len(repo.get("@folderName"))
+                        for repo in v:
+                            log.info(f'{(indent)*indent_template}{_colorize_cyan("[*]")}folder: {_colorize_green(repo.get("@folderName").ljust(maxlen)):} solutiontype: {_colorize_green(repo.get("@solutionType"))}  url: {_colorize_green(repo.get("@url"))}')
+                    else:
+                        for r in v:
+                            log.info(f"{(indent)*indent_template}{r}")
                 else:
                     if dst_config is not None and k in dst_config.keys():
                         if v == dst_config[k]:
-                            log.info(f"{(indent)*indent_template}[.]{k}: '{v}'")
+                            mark = "[.]"
+                            value = f"'{v}'"
                         else:
-                            log.info(f"{(indent)*indent_template}{_colorize_cyan('[*]')}{k}: '{dst_config[k]}' -> '{v}'")
+                            mark = _colorize_cyan('[*]')
+                            value = f"'{dst_config[k]}' -> '{v}'"
                     else:
-                        log.info(f"{(indent)*indent_template}{_colorize_green('[+]')}{k}: '{v}'")
+                        mark = _colorize_green('[+]')
+                        value = v
+                    log.info(f"{(indent)*indent_template}{mark}{k}: {value}")
 
         log.info(f'Чтение исходного config.yml: {self.config_path}')
         dst_config = yaml_tools.load_yaml_from_file(self.config_path)
