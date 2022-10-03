@@ -56,7 +56,6 @@ def _get_rx_version(need_short: bool = True) -> str:
         manifest_dict = json.loads(data)
         return manifest_dict["version"]
 
-
 def _copy_database_mssql(config: Config, src_db_name: str, dst_db_name: str) -> None:
     """Создать копию базы данных на Microsoft SQL Server.
 
@@ -191,6 +190,12 @@ def _colorize_red(x):
 def _colorize_cyan(x):
     return _colorize(x, color="cyan", attrs=["bold"])
 
+def _get_url(config) -> None:
+    """Вернуть  url для открытия веб-клиента текущего инстанса"""
+    vars = config.variables
+    srv_cfgs = config.services_config
+    return f'{vars["protocol"]}://{vars["host_fqdn"]}:{vars["http_port"]}/{srv_cfgs["SungeroWebServer"]["WEB_HOST_PATH_BASE"]}/#'
+
 def _show_config(config_path):
     config = yaml_tools.load_yaml_from_file(_get_check_file_path(config_path))
     vars = config.get("variables")
@@ -199,15 +204,30 @@ def _show_config(config_path):
     for repo in repos:
         if maxlen < len(repo.get("@folderName")):
             maxlen = len(repo.get("@folderName"))
-    log.info(Bold(f'Назначение:    {vars.get("purpose")}'))
+    log.info(Bold(f'Назначение:          {vars.get("purpose")}'))
     if vars.get("project_config_path") is not None:
-        log.info(f'project_config_path:      {_colorize_green(vars.get("project_config_path"))}')
-    log.info(f'database:      {_colorize_green(vars.get("database"))}')
-    log.info(f'home_path:     {_colorize_green(vars.get("home_path"))}')
-    log.info(f'home_path_src: {_colorize_green(vars.get("home_path_src"))}')
+        log.info(f'project_config_path: {_colorize_green(vars.get("project_config_path"))}')
+    log.info(f'database:            {_colorize_green(vars.get("database"))}')
+    log.info(f'home_path:           {_colorize_green(vars.get("home_path"))}')
+    log.info(f'home_path_src:       {_colorize_green(vars.get("home_path_src"))}')
     log.info('repositories:')
+    repos_str = []
+    maxlen_folder = 0
+    maxlen_status = 0
     for repo in repos:
-        log.info(f'  folder: {_colorize_green(repo.get("@folderName").ljust(maxlen)):} solutiontype: {_colorize_green(repo.get("@solutionType"))}  url: {_colorize_green(repo.get("@url"))}')
+        folder_str = f'folder: {_colorize_green(repo.get("@folderName")):}'
+        solutiontype_str = f'solutiontype: {_colorize_green(repo.get("@solutionType"))}'
+        url_str = f'url: {_colorize_green(repo.get("@url"))}'
+        status_str = f'status: {repo_info(vars.get("home_path_src"), repo.get("@folderName"))}'
+        repos_str.append({"folder": folder_str,
+                          "solutiontype": solutiontype_str,
+                          "url": url_str,
+                          "status": status_str})
+        maxlen_folder = len(folder_str) if maxlen_folder < len(folder_str) else maxlen_folder
+        maxlen_status = len(status_str) if maxlen_status < len(status_str) else maxlen_status
+
+    for repo_str in repos_str:
+        log.info(f'  {repo_str["folder"].ljust(maxlen_folder)} {repo_str["status"].ljust(maxlen_status)} {repo_str["solutiontype"]} {repo_str["url"]}')
 
 def _get_check_file_path(config_path: str) -> Path:
     if not config_path:
@@ -308,6 +328,36 @@ def _run_dds(config_path: str, need_run: bool, confirm: bool) -> None:
                     break
         else:
             log.warning(f'Компонента Directum Development Studio не установлена.')
+
+
+def repo_info(root_src, folder):
+    path = str(PurePath(root_src, folder))
+
+    if pathlib.Path(path).exists():
+        stdout_messages: List[str] = ['']
+        result = git_tools.git_run("branch --show-current", cwd=path, silent=True, log_stdout=False,
+                        filter=process.save_stdout_message_handler(stdout_messages))
+        if result == 0:
+            branch = stdout_messages.pop()
+
+            stdout_messages_f: List[str] = []
+            result = git_tools.git_run("status -s",
+                            cwd=path,
+                            filter=process.save_stdout_message_handler(stdout_messages_f),
+                            log_stdout=False)
+            if result == 0:
+                changes_dict = {}
+                for m in stdout_messages_f:
+                    t = m.split(" ")[0]
+                    changes_dict[t] = changes_dict.get(t, 0)+1
+                changes = ""
+                for k,v in changes_dict.items():
+                    if len(changes) == 0:
+                        changes = f'{k}:{v}'
+                    else:
+                        changes = f'{changes}, {k}:{v}'
+                return f'({_colorize_green(branch)}) {changes}'
+    return f'{_colorize("no data", color="yellow", attrs=["bold"])}'
 
 #endregion
 
@@ -941,6 +991,7 @@ distributions:
 
     def current(self) -> None:
         """ Показать параметры текущего проекта """
+        log.info(f'Веб-клиент:          {_get_url(self.config)}')
         _show_config(self.config_path)
 
     def rx_version(self) -> None:
@@ -950,9 +1001,7 @@ distributions:
 
     def url(self) -> None:
         """Показать url для открытия веб-клиента текущего инстанса"""
-        vars = self.config.variables
-        srv_cfgs = self.config.services_config
-        log.info(f'{vars["protocol"]}://{vars["host_fqdn"]}:{vars["http_port"]}/{srv_cfgs["SungeroWebServer"]["WEB_HOST_PATH_BASE"]}/#')
+        log.info(_get_url(self.config))
 
     def check_config(self, config_path: str) -> None:
         """ Показать содержимое указанного файла описания проекта
@@ -961,39 +1010,6 @@ distributions:
             config_path: путь к файлу с описанием проекта
         """
         _show_config(config_path)
-
-    def repos(self) -> None:
-        """Показать состояние репозиториев - текущая ветка и кратко состояние файлов"""
-        if "DevelopmentStudio" in self.config.services_config:
-            root_src = self.config.services_config["DevelopmentStudio"]["GIT_ROOT_DIRECTORY"]
-            log.info("")
-            log.info("Состояние репозиториев:")
-            for r  in self.config.services_config["DevelopmentStudio"]["REPOSITORIES"]["repository"]:
-                folder = r["@folderName"]
-                path = str(PurePath(root_src, folder))
-                stdout_messages: List[str] = ['']
-                result = git_tools.git_run("branch --show-current", cwd=path, silent=True, log_stdout=False,
-                                filter=process.save_stdout_message_handler(stdout_messages))
-                if result == 0:
-                    branch = stdout_messages.pop()
-
-                    stdout_messages_f: List[str] = []
-                    result = git_tools.git_run("status -s",
-                                    cwd=path,
-                                    filter=process.save_stdout_message_handler(stdout_messages_f),
-                                    log_stdout=False)
-                    if result == 0:
-                        changes_dict = {}
-                        for m in stdout_messages_f:
-                            t = m.split(" ")[0]
-                            changes_dict[t] = changes_dict.get(t, 0)+1
-                        changes = ""
-                        for k,v in changes_dict.items():
-                            if len(changes) == 0:
-                                changes = f'{k}:{v}'
-                            else:
-                                changes = f'{changes}, {k}:{v}'
-                        log.info(f' {path} ({_colorize_green(branch)}) {changes}')
 
     @staticmethod
     def help() -> None:
@@ -1013,6 +1029,5 @@ distributions:
         log.info('do map rx_version - показать версию Sungero')
         log.info('do map url - показать url для подключения к веб-клиенту текущего инстанса')
         log.info('do map check_config - показать ключевую информацию из указанного yml-файла описания проекта')
-        log.info('do map repos - показать краткую сводку по текущему состоянию репозиториев')
 
     #endregion
