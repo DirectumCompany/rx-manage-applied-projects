@@ -1,0 +1,23 @@
+# Variables that you can use in this configuration file.
+# The result configuration file is templated by the Jinja2 template engine.
+variables:
+    host_fqdn: 'localhost'
+    protocol: 'http'
+    #protocol: 'https'
+    home_path: ''
+common_config:
+    DATABASE_ENGINE: 'mssql'
+    CONNECTION_STRING: 'data source=...сервер...;initial catalog=;user id=...логин...;Password=...пароль...'
+    #DATABASE_ENGINE: 'postgres'
+    #CONNECTION_STRING: 'server=...сервер...;port=5432;database=...база_данных...;user id=...логин...;Password=...пароль...'
+    QUEUE_CONNECTION_STRING: 'virtualhost=...виртуальный_хост...;hostname=...имя_сервера...;port=5672;username=...логин...;password=...пароль...;Exchange=rxexch_install'
+    DATA_PROTECTION_CERTIFICATE_FILE: '...путь_к_pfx_файлу_сертификата...'
+    DATA_PROTECTION_CERTIFICATE_FILE_PASSWORD: '...пароль_сертификата...'
+    MONGODB_CONNECTION_STRING: 'mongodb://<...user...>:<...password...>@<...HOST_IP...>:27017'
+    AUTHENTICATION_USERNAME: 'Service User'
+    AUTHENTICATION_PASSWORD: '...пароль_системных_пользователей...'
+services_config:
+    #IIS:
+    #    ssl_cert_thumbprint: '...отпечаток_сертификата_для_SLL...'
+    DevelopmentStudio:
+        COMPANY_CODE: '...Код_компании_разработчика....'

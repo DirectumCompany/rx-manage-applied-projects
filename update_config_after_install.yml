@@ -1,0 +1,24 @@
+# Variables that you can use in this configuration file.
+# The result configuration file is templated by the Jinja2 template engine.
+variables:
+    purpose: 'назначение проекта'
+    database: 'база данных'
+    home_path_src: 'корневой каталог исходников'
+logs_path:
+    LOGS_PATH: '...корневой_каталог_логов...\{{ instance_name }}'
+common_config:
+    DATABASE_ENGINE: 'mssql'
+    CONNECTION_STRING: 'data source=...сервер...;initial catalog={{ database }};user id=...логин...;Password=...пароль...'
+    #DATABASE_ENGINE: 'postgres'
+    #CONNECTION_STRING: 'server=...сервер...;port=5432;database={{ database }};user id=...логин...;Password=...пароль...'
+    QUEUE_CONNECTION_STRING: 'virtualhost=...виртуальный_хост...;hostname=...имя_сервера...;port=5672;username=...логин...;password=...пароль...;Exchange=rxexch_{{ instance_name }}'
+    WIDGETS_ORLEANS_SILO_MONGO_GRAIN_STORAGE_DATABASE_NAME: 'GRAIN_{{ database }}'
+    WIDGETS_ORLEANS_SILO_MONGO_CLUSTERING_DATABASE_NAME: 'CLUSTERING_{{ database }}'
+services_config:
+    DevelopmentStudio:
+        SERVICE_RUNNER_CONFIG_PATH: '...Корневой_каталог_инстансов...\{{ instance_name }}\etc\_{{ instance_name }}\_services_config\ServiceRunner\_ConfigSettings.xml'
+        GIT_ROOT_DIRECTORY: '{{ home_path_src }}'
+
+manage_applied_projects:
+    postgresql_bin: '...путь_к_bin_каталогу_PostgreSQL...'
+    run_dds_after_set_project: 'True'
