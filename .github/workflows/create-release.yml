@@ -44,7 +44,7 @@ jobs:
       - name: Create zip
         uses: papeloto/action-zip@v1
         with:
-          files: src/ManageAppProjects readme.md update_config_before_install.yml update_config_after_install.yml
+          files: src/ManageAppProjects readme.pdf readme.md update_config_before_install.yml update_config_after_install.yml
           dest: ManageAppProjects.zip
           recursive: true
       - name: Upload release.zip

@@ -48,6 +48,7 @@
    * необходимо заполнить значения, отмеченные троеточием `...`
    * значения брать из config.yml, сохраненного на шаге №1.за исключением:
      * в свойстве DATA_PROTECTION_CERTIFICATE_FILE в update_config_before_install.yml укажите путь к pfx-файл, скопированному в каталог хранения сертификата сервисов
+     * в параметре CONNECTION_STRING в update_config_before_install.yml  параметр с именем базы данных (`initial catalog` для mssql и `database` для postgres) оставить пустым
 
 Получится примерно так. Файл _update_config_before_install.yml_:
 
@@ -164,6 +165,8 @@ manage_applied_projects:
    do components add_package путь_к_дистрибутиву\DirectumRX.zip
    ```
 
+   Для Directum RX 4.5 может потребоваться установка компоненты Redist.zip, если не установлена нужная версия .Net.
+
 6. Установить компоненту Manage Applied Project. См. раздел "Установка компоненты Manage Applied Projects". Рекомендуется устанавливать как plugin.
 
 7. В каталоге `etc` скопируйте файл `config.yml.example` в `config.yml`. В созданном `config.yml` в разделе `valiables` добавьте переменную `instance_name`, в значении которой укажите имя инстанса. Например, так
@@ -244,7 +247,7 @@ services_config:
 12. Создайте проект:
 
 ```
-do map create_project c:\rx\4530_BoxOnly.yml --package_path=C:\rx_ver\rx4530\etc\_builds\DirectumRX\DirectumRXbase.dat --need_import_src=True
+do map create_project c:\rx\4530_BoxOnly.yml --package_path=C:\rx_ver\4530\etc\_builds\DirectumRX\DirectumRXbase.dat --need_import_src=True
 ```
 
 В результате будет создан новый проект, в него будет принята стандартная прикладная разработка и приняты стандартные шаблоны документов.
@@ -292,7 +295,7 @@ services_config:
 
 Порядок создания нового проекта и переключения на него:
 
-1. Склонируйте (или создать) каталоги с репозиториями проекта
+1. Клонируйте (или создайте) каталоги с репозиториями проекта
 
 2. На основе ранее созданного конфига проекта создайте новый и заполните его.
 
