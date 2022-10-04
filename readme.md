@@ -652,7 +652,7 @@ do map url
 do map check_config
 ```
 
-check_sdk - проверить наличие необходимых версий .Net
+### check_sdk - проверить наличие необходимых версий .Net
 
 ```
 do map check_sdk
