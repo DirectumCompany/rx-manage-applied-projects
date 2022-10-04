@@ -1011,6 +1011,36 @@ distributions:
         """
         _show_config(config_path)
 
+    def check_sdk(self) -> None:
+        """ Проверить наличие необходимых компонент git и .Net """
+        from common_plugin import git_tools
+        from py_common import common_paths
+        if git_tools.git_run('--version', cwd=common_paths.root_path, log_stdout=False) != 0:
+            log.info(f'Git:           {_colorize_red("Not found")}')
+        else:
+            log.info(f'Git:           {_colorize_green("Ok")}')
+
+        from common_plugin.dotnet_tools import check_path, check_exe, check_dotnet_requirement_version
+        result_message = check_path()
+        if result_message:
+            log.info(f'Path to .Net:  {_colorize_red(result_message)}')
+            return
+        else:
+            log.info(f'Path to .Net:  {_colorize_green("Ok")}')
+
+        result_message = check_exe()
+        if result_message:
+            log.info(f'dotnet.exe:    {_colorize_red(result_message)}')
+            return
+        else:
+            log.info(f'dotnet.exe:    {_colorize_green("Ok")}')
+
+        result_message = check_dotnet_requirement_version('sdk')
+        if result_message:
+            log.info(f'Required .Net: {_colorize_red(result_message)}')
+        else:
+            log.info(f'Required .Net: {_colorize_green("Ok")}')
+
     @staticmethod
     def help() -> None:
         log.info('do map set - переключиться на проект, описаный в указанном yml-файла')
@@ -1029,5 +1059,6 @@ distributions:
         log.info('do map rx_version - показать версию Sungero')
         log.info('do map url - показать url для подключения к веб-клиенту текущего инстанса')
         log.info('do map check_config - показать ключевую информацию из указанного yml-файла описания проекта')
+        log.info('do map check_sdk - проверить наличие необходимых компонент git и .Net')
 
     #endregion
