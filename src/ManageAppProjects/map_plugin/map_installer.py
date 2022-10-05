@@ -538,6 +538,7 @@ class ManageAppliedProject(BaseComponent):
                     # импортировать шаблоны
                     log.info(_colorize_green("Перезапуск сервисов"))
                     all2.down()
+                    time.sleep(2)
                     all2.up()
                     all2.check()
                     log.info(_colorize_green("Импорт шаблонов"))
