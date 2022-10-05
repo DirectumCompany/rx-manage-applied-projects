@@ -22,6 +22,8 @@
 
 Текущая версия совместима с DirectumLauncher 4.2, DirectumLauncher 4.3, DirectumLauncher 4.4, DirectumLauncher 4.5
 
+Демонстрация установки Directum RX с использованием Manage Applied Projects - см. [Rutube](https://rutube.ru/video/private/872373ea98596d4dbbe437743e85a4d0/?p=hPiyutwT6D34hYTCSHYz7Q).
+
 ## Подготовка к установке инстансов Directum RX
 
 Использование компоненты предполагает, что:
