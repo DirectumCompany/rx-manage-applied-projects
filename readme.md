@@ -22,7 +22,7 @@
 
 Текущая версия совместима с DirectumLauncher 4.2, DirectumLauncher 4.3, DirectumLauncher 4.4, DirectumLauncher 4.5
 
-Демонстрация установки Directum RX с использованием Manage Applied Projects - см. [Rutube](https://rutube.ru/video/private/872373ea98596d4dbbe437743e85a4d0/?p=hPiyutwT6D34hYTCSHYz7Q).
+Демонстрация установки Directum RX с использованием Manage Applied Projects - см. [Rutube](https://rutube.ru/video/private/872373ea98596d4dbbe437743e85a4d0/?p=hPiyutwT6D34hYTCSHYz7Q), [Youtube](https://www.youtube.com/watch?v=2tvFTjQrrn4).
 
 ## Подготовка к установке инстансов Directum RX
 
@@ -41,10 +41,10 @@
 
 1. Установите Directum RX штатным инсталлятором. После установки скопируйте config.yml и папку с сертификатом, который используют сервисы для общения друг с другом. После этого Directum RX можно удалить - см. раздел "Удаление инстанса".
 2. Подготовьте структуру каталогов:
-   * создайте корневой каталог инстансов. Например, `с:\rx_ver`;
-   * создайте корневой каталог логов. Например, `с:\rx_logs`;
+   * создайте корневой каталог инстансов. Например, `c:\rx_ver`;
+   * создайте корневой каталог логов. Например, `c:\rx_logs`;
    * создайте корневой каталог проектов. Например, `c:\rx`;
-3. В корневом каталоге инстансов создайте каталог для хранения сертификата сервисов. Например, с:\rx_ver\data_protection. Скопируйте в каталог pfx- и cer-файлы сертификата, сохраненные на шаге №1. 
+3. В корневом каталоге инстансов создайте каталог для хранения сертификата сервисов. Например, c:\rx_ver\data_protection. Скопируйте в каталог pfx- и cer-файлы сертификата, сохраненные на шаге №1. 
 4. Скопируйте файлы update_config_before_install.yml и update_config_after_install.yml в корневой каталог конфигов проектов (`c:\rx`)
 5. Отредактируйте файлы update_config_before_install.yml и update_config_after_install.yml. Эти файлы будут использоваться в дальнейшем для корректировки config.yml устанавливаемых инстансов. Что следует учесть:
    * необходимо заполнить значения, отмеченные троеточием `...`
@@ -243,9 +243,9 @@ variables:
     database: 'rx4530_BoxOnly'
     # Домашняя директория, относительно которой хранятся все данные сервисов.
     # Используется только в конфигурационном файле.
-    home_path: 'с:\rx\4530\d\BoxOnly'
+    home_path: 'c:\rx\4530\d\BoxOnly'
     # Корневой каталог c репозиториями проекта
-    home_path_src: 'с:\rx\4530\s\'
+    home_path_src: 'c:\rx\4530\s\'
 # репозитории
 services_config:
     DevelopmentStudio:
@@ -289,9 +289,9 @@ variables:
     database: 'rx4530_RecurringActionItems'
     # Домашняя директория, относительно которой хранятся все данные сервисов.
     # Используется только в конфигурационном файле.
-    home_path: 'с:\rx\4530\d\RecurringActionItems'
+    home_path: 'c:\rx\4530\d\RecurringActionItems'
     # Корневой каталог c репозиториями проекта
-    home_path_src: 'с:\rx\4530\s\'
+    home_path_src: 'c:\rx\4530\s\'
 # репозитории
 services_config:
     DevelopmentStudio:
