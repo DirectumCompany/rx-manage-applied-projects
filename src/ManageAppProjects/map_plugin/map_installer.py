@@ -25,19 +25,6 @@ from py_common import io_tools, process
 from sungero_deploy.scripts_config import Config
 from common_plugin import git_tools
 
-if 'platform_plugin.sungero_tenants.dbtools' in sys.modules:
-    from platform_plugin.sungero_tenants.dbtools import ENABLE_XP_CMDSHELL # 4.5
-else:
-    from sungero_tenants.dbtools import ENABLE_XP_CMDSHELL # 4.2-4.4
-if 'platform_plugin.deployment_tool' in sys.modules:
-    from platform_plugin.deployment_tool import DeploymentTool # 4.5
-else:
-    from sungero_deploy.deployment_tool import DeploymentTool # 4.2-4.4
-if 'platform_plugin.static_controller' in sys.modules:
-    from platform_plugin.static_controller import StaticController # 4.5
-else:
-    from sungero_deploy.static_controller import StaticController  # 4.2-4.4
-
 MANAGE_APPLIED_PROJECTS_ALIAS = 'map'
 
 #region service function
@@ -159,6 +146,10 @@ def _copy_database_mssql(config: Config, src_db_name: str, dst_db_name: str) -> 
         if @@ERROR = 0
             print('!Файл созданной резервной копии удален')
         """
+    if 'platform_plugin.sungero_tenants.dbtools' in sys.modules:
+        from platform_plugin.sungero_tenants.dbtools import ENABLE_XP_CMDSHELL # 4.5
+    else:
+        from sungero_tenants.dbtools import ENABLE_XP_CMDSHELL # 4.2-4.4
 
     result = SungeroDB(config).execute_command(ENABLE_XP_CMDSHELL.format(command_text), return_results=True)
     log.info(f'Database copied: {result}')
@@ -374,6 +365,10 @@ class ManageAppliedProject(BaseComponent):
             config_path: Путь к конфигу.
         """
         super(self.__class__, self).__init__(config_path)
+        if 'platform_plugin.static_controller' in sys.modules:
+            from platform_plugin.static_controller import StaticController # 4.5
+        else:
+            from sungero_deploy.static_controller import StaticController  # 4.2-4.4
         self._static_controller = StaticController(self.config_path)
 
     def install(self) -> None:
@@ -533,6 +528,10 @@ class ManageAppliedProject(BaseComponent):
                 # принять пакет разработки в БД
                 if package_path != "":
                     log.info(_colorize_green("Прием пакета разработки"))
+                    if 'platform_plugin.deployment_tool' in sys.modules:
+                        from platform_plugin.deployment_tool import DeploymentTool # 4.5
+                    else:
+                        from sungero_deploy.deployment_tool import DeploymentTool # 4.2-4.4
                     DeploymentTool(self.config_path).deploy(package = package_path, init = True)
 
                     # импортировать шаблоны
