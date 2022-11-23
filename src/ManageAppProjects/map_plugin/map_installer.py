@@ -163,11 +163,27 @@ def _copy_database_postgresql(src_sungero_config: Any, src_db_name: str, dst_db_
         dst_db_name: целевая БД.
     """
     postgree_path = _get_map_settings(config=src_sungero_config, param_name="postgresql_bin", is_required=True)
-    cmd = f'"{postgree_path}\\createdb.exe" -w {dst_db_name}'
+    # достать параметры подключения к Postgree
+    connection_string_yml = src_sungero_config["common_config"]["CONNECTION_STRING"].split(";")
+    server = ""
+    port = ""
+    username = ""
+    for param in connection_string_yml:
+        p = param.split("=")
+        if p[0].lower() == "server":
+            server = p[1]
+        if p[0].lower() == "user id":
+            username = p[1]
+        if p[0].lower() == "port":
+            port = p[1]
+    # сформировать строку подключения к серверу в зависимости от используемого типа аутентификации
+    connection_string = f'--host={server} --port={port} --username={username} --no-password'
+    cmd = f'"{postgree_path}\\createdb.exe" {connection_string} {dst_db_name}'
+    log.debug(f'{cmd}')
     exit_code = process.try_execute(cmd, encoding='cp1251') #cp1251  utf-8
     if exit_code != 0:
         raise IOError(f'Ошибка при создании БД')
-    cmd = f'"{postgree_path}\\pg_dump.exe" -h localhost -w {src_db_name} | "{postgree_path}\\psql" -q -h localhost -w {dst_db_name}'
+    cmd = f'"{postgree_path}\\pg_dump.exe" {connection_string} {src_db_name} | "{postgree_path}\\psql.exe" -q {connection_string} {dst_db_name}'
     exit_code = process.try_execute(cmd, encoding='cp1251')
     if exit_code != 0:
         raise IOError(f'Ошибка при копировании данных БД')
