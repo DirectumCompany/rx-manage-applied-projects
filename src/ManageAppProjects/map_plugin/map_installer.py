@@ -636,7 +636,7 @@ class ManageAppliedProject(BaseComponent):
                 dst_config["variables"]["database"] = src_config["variables"]["database"]
                 dst_config["variables"]["home_path"] = src_config["variables"]["home_path"]
                 dst_config["variables"]["home_path_src"]  = src_config["variables"]["home_path_src"]
-                dst_config["variables"]["project_config_path"]  = project_config_path
+                dst_config["variables"]["project_config_path"]  = f"'{{ project_config_path }}'"
                 yaml_tools.yaml_dump_to_file(dst_config, self.config_path)
                 time.sleep(2)
 
