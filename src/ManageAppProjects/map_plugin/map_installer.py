@@ -25,6 +25,7 @@ from py_common import io_tools, process
 from sungero_deploy.scripts_config import Config
 from common_plugin import git_tools
 
+
 MANAGE_APPLIED_PROJECTS_ALIAS = 'map'
 
 #region service function
@@ -346,6 +347,23 @@ def repo_info(root_src, folder):
                         filter=process.save_stdout_message_handler(stdout_messages))
         if result == 0:
             branch = stdout_messages.pop()
+            if branch == "":
+                commit_hash = ""
+                if git_tools.git_run("rev-parse HEAD", cwd=path, silent=True, log_stdout=False,
+                                     filter=process.save_stdout_message_handler(stdout_messages)) == 0:
+                    commit_hash = stdout_messages.pop()
+                tag = ""
+                stdout_messages_f: List[str] = []
+                if git_tools.git_run("show-ref --tags", cwd=path, silent=True, log_stdout=False,
+                                     filter=process.save_stdout_message_handler(stdout_messages_f)) == 0:
+                    for tag_line in list(filter(lambda x: x.startswith(commit_hash), stdout_messages_f)):
+                        tag = tag_line.split(" ")[1][5:] if tag == "" else f'{tag}, {tag_line.split(" ")[1][5:]}'
+                if tag == "":
+                    detail = f"{commit_hash[:8]}..."
+                else:
+                    detail = tag
+            else:
+                detail = branch
 
             stdout_messages_f: List[str] = []
             result = git_tools.git_run("status -s",
@@ -363,7 +381,7 @@ def repo_info(root_src, folder):
                         changes = f'{k}:{v}'
                     else:
                         changes = f'{changes}, {k}:{v}'
-                return f'({_colorize_green(branch)}) {changes}'
+                return f'({_colorize_green(detail)}) {changes}'
     return f'{_colorize("no data", color="yellow", attrs=["bold"])}'
 
 #endregion
