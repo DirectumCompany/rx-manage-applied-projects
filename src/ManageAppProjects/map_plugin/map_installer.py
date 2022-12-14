@@ -10,7 +10,9 @@ from pathlib import PurePath, Path
 import os
 import sys
 import json
+from click import pause
 from ruamel.yaml import CommentedMap, CommentedSeq
+
 
 from fire.formatting import Bold
 
@@ -422,12 +424,13 @@ class ManageAppliedProject(BaseComponent):
 
     #region manage projects
 
-    def update_config(self, template_config_path: str, confirm: bool = True):
+    def update_config(self, template_config_path: str, confirm: bool = True, need_pause: bool = False):
         """ Изменить config.yml используя шаблон
 
         Args:
             template_config_path - путь к конфигу, из которого будут браться новые значения
             confirm: признак необходимости выводить запрос на создание проекта. По умолчанию - True
+            need_pause: признак необходимости в конце сделать паузу и ожидать нажатия клавиши пользователем. По умолчанию - False
         """
         inst_path = Path(self.config_path).parent.parent
         log.info(f'Корневой каталог текущего инстанса: {str(inst_path)}')
@@ -505,8 +508,12 @@ class ManageAppliedProject(BaseComponent):
         if answ=='y' or answ=='Y':
             _update_CommentedMap(template_config, dst_config)
             yaml_tools.yaml_dump_to_file(dst_config, self.config_path)
+        if need_pause or need_pause is None:
+            pause()
 
-    def create_project(self, project_config_path: str, package_path:str = "", need_import_src:bool = False, confirm: bool = True, rundds: bool = None) -> None:
+    def create_project(self, project_config_path: str, package_path:str = "",
+                       need_import_src:bool = False, confirm: bool = True,
+                       rundds: bool = None, need_pause: bool = False) -> None:
         """ Создать новый прикладной проект (эксперементальная фича).
         Будет создана БД, в неё будет принят пакет разработки и стандратные шаблоны.
 
@@ -516,6 +523,7 @@ class ManageAppliedProject(BaseComponent):
             need_import_src: признак необходимости принять исходники из указанного пакета разработки. По умолчанию - False
             confirm: признак необходимости выводить запрос на создание проекта. По умолчанию - True
             rundds: признак необходимости запускать DDS. По умолчанию - None, т.е. будет браться значение, определенное в config.yml
+            need_pause: признак необходимости в конце сделать паузу и ожидать нажатия клавиши пользователем. По умолчанию - False
         """
         while (True):
             """Подгрузить необходимые модули.
@@ -602,6 +610,8 @@ class ManageAppliedProject(BaseComponent):
                 log.info("")
                 log.info(_colorize_green("Новые параметры:"))
                 self.current()
+                if need_pause or need_pause is None:
+                    pause()
 
                 # запустить DDS
                 _run_dds(self.config_path, rundds, confirm)
@@ -610,13 +620,14 @@ class ManageAppliedProject(BaseComponent):
             elif answ=='n' or answ=='N':
                 break
 
-    def set(self, project_config_path: str, confirm: bool = True, rundds: bool = None) -> None:
+    def set(self, project_config_path: str, confirm: bool = True, rundds: bool = None, need_pause: bool = False) -> None:
         """ Переключиться на указанный прикладной проект
 
         Args:
             project_config_path: путь к файлу с описанием проекта
             confirm: признак необходимости выводить запрос на создание проекта. По умолчанию - True
             rundds: признак необходимости запускать DDS. По умолчанию - None, т.е. будет браться значение, определенное в config.yml
+            need_pause: признак необходимости в конце сделать паузу и ожидать нажатия клавиши пользователем. По умолчанию - False
         """
         while (True):
             _show_config(project_config_path)
@@ -667,6 +678,8 @@ class ManageAppliedProject(BaseComponent):
                 log.info("")
                 log.info(_colorize_green("Новые параметры:"))
                 self.current()
+                if need_pause or need_pause is None:
+                    pause()
 
                 # запустить DDS
                 _run_dds(self.config_path, rundds, confirm)
@@ -706,7 +719,8 @@ services_config:
 """
         _generate_empty_config_by_template(new_config_path, template_config)
 
-    def clone_project(self, src_project_config_path: str, dst_project_config_path: str, confirm: bool = True, rundds: bool = None) -> None:
+    def clone_project(self, src_project_config_path: str, dst_project_config_path: str,
+                        confirm: bool = True, rundds: bool = None, need_pause: bool = False) -> None:
         """ Сделать копию прикладного проекта (эксперементальная фича).
         Будет сделана копия БД и домашнего каталога проекта.
 
@@ -715,6 +729,7 @@ services_config:
             dst_project_config_path: путь к файлу с описанием проекта, в который надо скопировать
             confirm: признак необходимости выводить запрос на создание проекта. По умолчанию - True
             rundds: признак необходимости запускать DDS. По умолчанию - None, т.е. будет браться значение, определенное в config.yml
+            need_pause: признак необходимости в конце сделать паузу и ожидать нажатия клавиши пользователем. По умолчанию - False
         """
         sungero_db = SungeroDB(get_config_model(self.config_path))
 
@@ -755,7 +770,7 @@ services_config:
                 shutil.copytree(src_homepath, dst_homepath)
                 # переключить проект
                 log.info("")
-                self.set(dst_project_config_path, confirm, rundds)
+                self.set(dst_project_config_path, confirm, rundds, need_pause)
                 break
             elif answ=='n' or answ=='N':
                 break
@@ -813,7 +828,7 @@ services_config:
 
     #region manage distribution
     def build_distributions(self, distributions_config_path: str, destination_folder: str,
-                            repo_folder: str, increment_version: bool = True) -> int:
+                            repo_folder: str, increment_version: bool = True, need_pause: bool = False) -> int:
         """ Построить дистрибутивы проекта
 
         Args:
@@ -821,6 +836,7 @@ services_config:
             destination_folder: папка, в которой будет создага папка с номером версии, внутри которой будут подготовлены дистрибутивы
             repo_folder: путь к локальному репозиторию, дистрибутивы которого надо собрать
             increment_version: признак необходимости увеличить номер версии решения после сборки дистрибутива
+            need_pause: признак необходимости в конце сделать паузу и ожидать нажатия клавиши пользователем. По умолчанию - False
         """
         try:
             # Проверить переданные параметры
@@ -918,12 +934,18 @@ services_config:
                 else:
                     log.warning(f'Не найден параметр devpacks_for_increment_version - увеличение версии решения не будет выполнено')
 
+            if need_pause or need_pause is None:
+                pause()
             return 0
         except Exception as error:
             log.error(f'При формировании дистирибутивов возникла ошибка {error.value}')
+            if need_pause or need_pause is None:
+                pause()
             return 1
 
-    def export_devpack(self, devpack_config_name: str, devpack_file_name: str, increment_version: bool = None, set_version: str = None) -> None:
+    def export_devpack(self, devpack_config_name: str, devpack_file_name: str,
+                       increment_version: bool = None, set_version: str = None,
+                       need_pause: bool = False) -> None:
         """Экспортировать пакет разработки
 
         Args:
@@ -931,6 +953,7 @@ services_config:
             devpack_file_name: путь к создаваемому файлу с пакетом разработки. Задает параметр --development-package
             increment_version: признак, который определяет нужно увеличивать номер версии модулей и решений или нет.
             set_version: номер версии, который надо установить. Задает параметр --set-version. . Если указано значение None - то не передается при вызове DDS
+            need_pause: признак необходимости в конце сделать паузу и ожидать нажатия клавиши пользователем. По умолчанию - False
         """
         inc_ver_param = ""
         if increment_version is not None:
@@ -952,6 +975,8 @@ services_config:
             raise RuntimeError('Не найден модуль dds_plugin.development_studio')
         command = f' --configuration {devpack_config_name} --development-package {devpack_file_name} {inc_ver_param} {set_ver_param}'
         DevelopmentStudio(self.config_path).run(command=command)
+        if need_pause or need_pause is None:
+            pause()
 
     def generate_empty_distributions_config(self, new_config_path: str) -> None:
         """ Создать новый файл с описанием дистрибутивов проекта
@@ -998,13 +1023,14 @@ distributions:
     #endregion
 
     #region other
-    def clear_log(self, root_logs: str = None, limit_day: int = 3) -> None:
+    def clear_log(self, root_logs: str = None, limit_day: int = 3, need_pause: bool = False) -> None:
         """Удалить старые логи. Чистит в root_logs и в подкаталогах.
         Предполагается, что последние символы имени файла лога - YYYY-MM-DD.log
 
         Args:
             root_logs: корневой каталог репозитория. Если не указан, то будут чиститься логи сервисов текущего instance
             limit_day: за сколько последних дней оставить логи. По умолчанию - 3. Если указать 0 - будут удалены все логи.
+            need_pause: признак необходимости в конце сделать паузу и ожидать нажатия клавиши пользователем. По умолчанию - False
         """
         if root_logs is None:
             log_folders = []
@@ -1022,31 +1048,58 @@ distributions:
                     date_subs = file[-14:-4]
                     if date_subs <= limit_date:
                         os.remove(os.path.join(root, file))
+        if need_pause or need_pause is None:
+            pause()
 
-    def current(self) -> None:
-        """ Показать параметры текущего проекта """
+    def current(self, need_pause: bool = False) -> None:
+        """ Показать параметры текущего проекта
+
+        Args:
+            need_pause: признак необходимости в конце сделать паузу и ожидать нажатия клавиши пользователем. По умолчанию - False
+        """
         log.info(f'Веб-клиент:          {_get_url(self.config)}')
         _show_config(self.config_path)
+        if need_pause or need_pause is None:
+            pause()
 
-    def rx_version(self) -> None:
-        """Показать версию RX"""
+    def rx_version(self, need_pause: bool = False) -> None:
+        """Показать версию RX
+
+        Args:
+            need_pause: признак необходимости в конце сделать паузу и ожидать нажатия клавиши пользователем. По умолчанию - False
+        """
         ver = _get_rx_version()
         log.info(f'Directum RX: {ver}')
+        if need_pause or need_pause is None:
+            pause()
 
-    def url(self) -> None:
-        """Показать url для открытия веб-клиента текущего инстанса"""
+    def url(self, need_pause: bool = False) -> None:
+        """Показать url для открытия веб-клиента текущего инстанса
+
+        Args:
+            need_pause: признак необходимости в конце сделать паузу и ожидать нажатия клавиши пользователем. По умолчанию - False
+        """
         log.info(_get_url(self.config))
+        if need_pause or need_pause is None:
+            pause()
 
-    def check_config(self, config_path: str) -> None:
+    def check_config(self, config_path: str, need_pause: bool = False) -> None:
         """ Показать содержимое указанного файла описания проекта
 
         Args:
             config_path: путь к файлу с описанием проекта
+            need_pause: признак необходимости в конце сделать паузу и ожидать нажатия клавиши пользователем. По умолчанию - False
         """
         _show_config(config_path)
+        if need_pause or need_pause is None:
+            pause()
 
-    def check_sdk(self) -> None:
-        """ Проверить наличие необходимых компонент git и .Net """
+    def check_sdk(self, need_pause: bool = False) -> None:
+        """ Проверить наличие необходимых компонент git и .Net
+
+        Args:
+            need_pause: признак необходимости в конце сделать паузу и ожидать нажатия клавиши пользователем. По умолчанию - False
+        """
         from common_plugin import git_tools
         from py_common import common_paths
         if git_tools.git_run('--version', cwd=common_paths.root_path, log_stdout=False) != 0:
@@ -1074,6 +1127,8 @@ distributions:
             log.info(f'Required .Net: {_colorize_red(result_message)}')
         else:
             log.info(f'Required .Net: {_colorize_green("Ok")}')
+        if need_pause or need_pause is None:
+            pause()
 
     @staticmethod
     def help() -> None:
