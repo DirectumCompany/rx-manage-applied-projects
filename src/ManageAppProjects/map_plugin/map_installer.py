@@ -285,7 +285,10 @@ def _update_sungero_config(project_config_path, sungero_config_path):
     dst_config["variables"]["database"] = src_config["variables"]["database"]
     dst_config["variables"]["home_path"] = src_config["variables"]["home_path"]
     dst_config["variables"]["home_path_src"]  = src_config["variables"]["home_path_src"]
-    dst_config["variables"]["project_config_path"]  = project_config_path
+    # костыль по быстрому, чтобы project_config_path была нужного типа
+    dst_config["variables"]["project_config_path"]  = dst_config["variables"]["database"]
+    dst_config["variables"]["project_config_path"] = project_config_path
+
     return dst_config
 
 def _get_map_settings(config_path: str = None, config: Any = None, param_name: str = None, is_required: bool = False, default_value: Any = None) -> Any:
@@ -313,7 +316,6 @@ def _get_map_settings(config_path: str = None, config: Any = None, param_name: s
             else:
                 return default_value
     else:
-        print(5)
         if is_required:
             raise AssertionError('В config.yml отсутствует раздел "manage_applied_projects"')
         else:
@@ -647,7 +649,9 @@ class ManageAppliedProject(BaseComponent):
                 dst_config["variables"]["database"] = src_config["variables"]["database"]
                 dst_config["variables"]["home_path"] = src_config["variables"]["home_path"]
                 dst_config["variables"]["home_path_src"]  = src_config["variables"]["home_path_src"]
-                dst_config["variables"]["project_config_path"]  = f"'{{ project_config_path }}'"
+                # костыль по быстрому, чтобы project_config_path была нужного типа
+                dst_config["variables"]["project_config_path"]  = dst_config["variables"]["database"]
+                dst_config["variables"]["project_config_path"] = project_config_path
                 yaml_tools.yaml_dump_to_file(dst_config, self.config_path)
                 time.sleep(2)
 
