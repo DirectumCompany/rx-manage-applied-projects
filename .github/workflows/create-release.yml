@@ -42,7 +42,7 @@ jobs:
           filename: 'src/ManageAppProjects/manifest.json'
           placeholder: '${VERSION}'
       - name: Create zip
-        uses: papeloto/action-zip@v2
+        uses: papeloto/action-zip@v3
         with:
           files: src/ManageAppProjects readme.pdf readme.md update_config_before_install.yml update_config_after_install.yml
           dest: ManageAppProjects.zip
