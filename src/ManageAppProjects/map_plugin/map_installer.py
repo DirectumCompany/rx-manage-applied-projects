@@ -10,7 +10,7 @@ from pathlib import PurePath, Path
 import os
 import sys
 import json
-from click import pause
+from ui_installer.lib.click import pause
 from ruamel.yaml import CommentedMap, CommentedSeq
 
 
