@@ -622,7 +622,7 @@ class ManageAppliedProject(BaseComponent):
             elif answ=='n' or answ=='N':
                 break
 
-    def set(self, project_config_path: str, confirm: bool = True, rundds: bool = None, need_pause: bool = False) -> None:
+    def set(self, project_config_path: str = None, confirm: bool = True, rundds: bool = None, need_pause: bool = False) -> None:
         """ Переключиться на указанный прикладной проект
 
         Args:
@@ -631,6 +631,48 @@ class ManageAppliedProject(BaseComponent):
             rundds: признак необходимости запускать DDS. По умолчанию - None, т.е. будет браться значение, определенное в config.yml
             need_pause: признак необходимости в конце сделать паузу и ожидать нажатия клавиши пользователем. По умолчанию - False
         """
+
+        if project_config_path is None:
+            # если конфиг проекта не передали, то попробовать предложить к выбору файлы из каталога, указанного в переменной project_config_path
+            config_yaml = yaml_tools.load_yaml_from_file(self.config_path)
+            instance_name = config_yaml["variables"]["instance_name"]
+            prj_cfg_path = config_yaml["variables"].get("project_config_path", None)
+            if prj_cfg_path is None:
+                log.error("Переменная project_config_path отсутствует в config.yml")
+                return
+            if prj_cfg_path == "":
+                log.error("Переменная project_config_path config.yml не имеет значения.")
+                return
+            if not Path(prj_cfg_path).parent.is_dir():
+                log.error(f"В переменная project_config_path указан не существующий каталог {prj_cfg_path}.")
+                return
+            project_configs_folder = PurePath(prj_cfg_path).parent
+            show_all_configs = False
+            while (True):
+                if show_all_configs:
+                    filter = "*.yml"
+                else:
+                    filter = f"{instance_name}_*.yml"
+                configs_list = []
+                for child in list(Path(project_configs_folder).glob(filter)):
+                    configs_list.append(str(child.name))
+                i = 1
+                for n in configs_list:
+                    log.info(f"{i:2}. {n}")
+                    i += 1
+                answ = input(f"Введите номер (0 - отмена, 99 - {'Файлы для инстанса' if show_all_configs else 'Все файлы'}):")
+                if answ.isdigit():
+                    selected_index = int(answ)
+                else:
+                    selected_index = -1
+                if selected_index == 99:
+                    show_all_configs = not show_all_configs
+                elif selected_index == 0:
+                    return
+                if selected_index >=1 and selected_index <= len(configs_list):
+                    project_config_path = Path(project_configs_folder, configs_list[selected_index-1])
+                    break
+
         while (True):
             _show_config(project_config_path)
             answ = input("Переключиться на указанный проект? (y,n):") if confirm else 'y'
