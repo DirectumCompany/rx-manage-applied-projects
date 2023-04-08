@@ -195,6 +195,8 @@ def _colorize(x, color, attrs):
     return termcolor.colored(x, color=color, attrs=attrs)
 def _colorize_green(x):
     return _colorize(x, color="green", attrs=["bold"])
+def _colorize_yellow(x):
+    return _colorize(x, color="yellow", attrs=["bold"])
 def _colorize_red(x):
     return _colorize(x, color="red", attrs=["bold"])
 def _colorize_cyan(x):
@@ -205,39 +207,6 @@ def _get_url(config) -> None:
     vars = config.variables
     srv_cfgs = config.services_config
     return f'{vars["protocol"]}://{vars["host_fqdn"]}:{vars["http_port"]}/{srv_cfgs["SungeroWebServer"]["WEB_HOST_PATH_BASE"]}/#'
-
-def _show_config(config_path):
-    config = yaml_tools.load_yaml_from_file(_get_check_file_path(config_path))
-    vars = config.get("variables")
-    repos = config.get("services_config").get("DevelopmentStudio").get('REPOSITORIES').get("repository")
-    maxlen = 0
-    for repo in repos:
-        if maxlen < len(repo.get("@folderName")):
-            maxlen = len(repo.get("@folderName"))
-    log.info(Bold(f'Назначение:          {vars.get("purpose")}'))
-    if vars.get("project_config_path") is not None:
-        log.info(f'project_config_path: {_colorize_green(vars.get("project_config_path"))}')
-    log.info(f'database:            {_colorize_green(vars.get("database"))}')
-    log.info(f'home_path:           {_colorize_green(vars.get("home_path"))}')
-    log.info(f'home_path_src:       {_colorize_green(vars.get("home_path_src"))}')
-    log.info('repositories:')
-    repos_str = []
-    maxlen_folder = 0
-    maxlen_status = 0
-    for repo in repos:
-        folder_str = f'folder: {_colorize_green(repo.get("@folderName")):}'
-        solutiontype_str = f'solutiontype: {_colorize_green(repo.get("@solutionType"))}'
-        url_str = f'url: {_colorize_green(repo.get("@url"))}'
-        status_str = f'status: {repo_info(vars.get("home_path_src"), repo.get("@folderName"))}'
-        repos_str.append({"folder": folder_str,
-                          "solutiontype": solutiontype_str,
-                          "url": url_str,
-                          "status": status_str})
-        maxlen_folder = len(folder_str) if maxlen_folder < len(folder_str) else maxlen_folder
-        maxlen_status = len(status_str) if maxlen_status < len(status_str) else maxlen_status
-
-    for repo_str in repos_str:
-        log.info(f'  {repo_str["folder"].ljust(maxlen_folder)} {repo_str["status"].ljust(maxlen_status)} {repo_str["solutiontype"]} {repo_str["url"]}')
 
 def _get_check_file_path(config_path: str) -> Path:
     if not config_path:
@@ -266,30 +235,6 @@ def _generate_empty_config_by_template(new_config_path: str, template_config: st
         log.info(_colorize_green(f'Создан файл {new_config_path}.'))
     else:
         log.error(f'Файл {new_config_path} уже существует.')
-
-def _update_sungero_config(project_config_path, sungero_config_path):
-    """Преобразовать текущий config.yml в соотвтетствии с указанным конфигом проекта.
-    Преобразование выполняется без сохранения на диске
-
-    Args:
-        * project_config_path - путь к конфигу проекта
-        * sungero_config_path - путь к config.yml
-
-    Return:
-        * преоразованный конфиг
-    """
-    src_config = yaml_tools.load_yaml_from_file(project_config_path)
-    dst_config = yaml_tools.load_yaml_from_file(sungero_config_path)
-    dst_config["services_config"]["DevelopmentStudio"]['REPOSITORIES']["repository"]  = src_config["services_config"]["DevelopmentStudio"]['REPOSITORIES']["repository"].copy()
-    dst_config["variables"]["purpose"] = src_config["variables"]["purpose"]
-    dst_config["variables"]["database"] = src_config["variables"]["database"]
-    dst_config["variables"]["home_path"] = src_config["variables"]["home_path"]
-    dst_config["variables"]["home_path_src"]  = src_config["variables"]["home_path_src"]
-    # костыль по быстрому, чтобы project_config_path была нужного типа
-    dst_config["variables"]["project_config_path"]  = dst_config["variables"]["database"]
-    dst_config["variables"]["project_config_path"] = project_config_path
-
-    return dst_config
 
 def _get_map_settings(config_path: str = None, config: Any = None, param_name: str = None, is_required: bool = False, default_value: Any = None) -> Any:
     """Получить значение параметра компоненты Manage Applied Projects из config.yml
@@ -341,7 +286,6 @@ def _run_dds(config_path: str, need_run: bool, confirm: bool) -> None:
         else:
             log.warning(f'Компонента Directum Development Studio не установлена.')
 
-
 def repo_info(root_src, folder):
     path = str(PurePath(root_src, folder))
 
@@ -388,6 +332,140 @@ def repo_info(root_src, folder):
                 return f'({_colorize_green(detail)}) {changes}'
     return f'{_colorize("no data", color="yellow", attrs=["bold"])}'
 
+def _show_config2(template_config_path: str, current_config_path: str, message: str) -> None:
+    """Показать отличия двух конфигов"""
+    template_config = yaml_tools.load_yaml_from_file(template_config_path)
+    current_config = yaml_tools.load_yaml_from_file(current_config_path)
+    log.info(message)
+    _show_CommentedMap(template_config, current_config)
+
+def _show_config(config_path):
+    """Показать ключевые параметры указанного конфига"""
+    config = yaml_tools.load_yaml_from_file(_get_check_file_path(config_path))
+    vars = config.get("variables")
+    repos = config.get("services_config").get("DevelopmentStudio").get('REPOSITORIES').get("repository")
+    maxlen = 0
+    for repo in repos:
+        if maxlen < len(repo.get("@folderName")):
+            maxlen = len(repo.get("@folderName"))
+    log.info(Bold(f'Назначение:          {vars.get("purpose")}'))
+    if vars.get("project_config_path") is not None:
+        log.info(f'project_config_path: {_colorize_green(vars.get("project_config_path"))}')
+    log.info(f'database:            {_colorize_green(vars.get("database"))}')
+    log.info(f'home_path:           {_colorize_green(vars.get("home_path"))}')
+    log.info(f'home_path_src:       {_colorize_green(vars.get("home_path_src"))}')
+    log.info('repositories:')
+    repos_str = []
+    maxlen_folder = 0
+    maxlen_status = 0
+    for repo in repos:
+        folder_str = f'folder: {_colorize_green(repo.get("@folderName")):}'
+        solutiontype_str = f'solutiontype: {_colorize_green(repo.get("@solutionType"))}'
+        url_str = f'url: {_colorize_green(repo.get("@url"))}'
+        status_str = f'status: {repo_info(vars.get("home_path_src"), repo.get("@folderName"))}'
+        repos_str.append({"folder": folder_str,
+                          "solutiontype": solutiontype_str,
+                          "url": url_str,
+                          "status": status_str})
+        maxlen_folder = len(folder_str) if maxlen_folder < len(folder_str) else maxlen_folder
+        maxlen_status = len(status_str) if maxlen_status < len(status_str) else maxlen_status
+
+    for repo_str in repos_str:
+        log.info(f'  {repo_str["folder"].ljust(maxlen_folder)} {repo_str["status"].ljust(maxlen_status)} {repo_str["solutiontype"]} {repo_str["url"]}')
+
+def _show_CommentedMap(template_config: CommentedMap, dst_config: CommentedMap, indent: int = 1, original_template_config: CommentedMap = None):
+    indent_template = "  "
+    mark = ""
+    if original_template_config is None:
+        original_template_config = template_config.copy()
+    for k,v in template_config.items():
+        if type(v) == CommentedMap:
+            # текущий элемент - узел, надо в него провалиться
+            dst_config_next_level = None
+            if dst_config is not None and k in dst_config.keys():
+                mark = ""
+                dst_config_next_level = dst_config[k]
+            else:
+                mark = _colorize_green('[+]')
+            log.info(f"{(indent)*indent_template}{mark}{k}:")
+            _show_CommentedMap(v, dst_config_next_level, (indent+1), original_template_config)
+        elif type(v) == CommentedSeq:
+            if k.lower() == "repository":
+                vars = original_template_config.get("variables")
+                repos_str = []
+                maxlen_folder = 0
+                maxlen_status = 0
+                for repo in v:
+                    folder_str = f'folder: {_colorize_green(repo.get("@folderName")):}'
+                    solutiontype_str = f'solutiontype: {_colorize_green(repo.get("@solutionType"))}'
+                    url_str = f'url: {_colorize_green(repo.get("@url"))}'
+                    status_str = f'status: {repo_info(vars.get("home_path_src"), repo.get("@folderName"))}'
+                    repos_str.append({"folder": folder_str,
+                                    "solutiontype": solutiontype_str,
+                                    "url": url_str,
+                                    "status": status_str})
+                    maxlen_folder = len(folder_str) if maxlen_folder < len(folder_str) else maxlen_folder
+                    maxlen_status = len(status_str) if maxlen_status < len(status_str) else maxlen_status
+                for repo_str in repos_str:
+                    log.info(f'{(indent)*indent_template}{repo_str["folder"].ljust(maxlen_folder)} {repo_str["status"].ljust(maxlen_status)} {repo_str["solutiontype"]} {repo_str["url"]}')
+            else:
+                for r in v:
+                    log.info(f"{(indent)*indent_template}{r}")
+        else:
+            if dst_config is not None and k in dst_config.keys():
+                if v == dst_config[k]:
+                    # значение не меняется
+                    mark = _colorize_yellow("[.]")
+                    value = f"{_colorize_yellow(v)}"
+                else:
+                    # значение изменилось
+                    mark = _colorize_cyan('[*]')
+                    value = f"{_colorize_green(v)} ({_colorize_yellow(dst_config[k])})"
+                    #value = f"'{_colorize_yellow(dst_config[k])}' -> '{_colorize_green(v)}'"
+            else:
+                # новая переменная в конфиге
+                mark = _colorize_green('[+]')
+                value = f"{_colorize_green(v)}"
+            log.info(f"{(indent)*indent_template}{mark}{k}: {value}")
+
+def _update_sungero_config(project_config_path, sungero_config_path):
+    """Преобразовать текущий config.yml в соотвтетствии с указанным конфигом проекта.
+    Преобразование выполняется без сохранения на диске
+
+    Args:
+        * project_config_path - путь к конфигу проекта
+        * sungero_config_path - путь к config.yml
+
+    Return:
+        * преоразованный конфиг
+    """
+    template_config = yaml_tools.load_yaml_from_file(project_config_path)
+    dst_config = yaml_tools.load_yaml_from_file(sungero_config_path)
+    dst_config = _update_CommentedMap(template_config, dst_config)
+    dst_config["variables"]["project_config_path"] = project_config_path
+    return dst_config
+
+def _update_CommentedMap(template_config: CommentedMap, dst_config: CommentedMap):
+    for k,v in template_config.items():
+        if type(v) == CommentedMap:
+            if k in dst_config.keys():
+                if dst_config[k] is not None:
+                    _update_CommentedMap(v, dst_config[k])
+                else:
+                    dst_config[k] = v
+            else:
+                dst_config[k] = v
+                _update_CommentedMap(v, dst_config[k])
+        elif type(v) == CommentedSeq:
+            if k in dst_config.keys():
+                dst_config[k] = v
+            else:
+                dst_config[k] = v
+                _update_CommentedMap(v, dst_config[k])
+        else:
+            dst_config[k] = v
+    return dst_config
+
 #endregion
 
 @component(alias=MANAGE_APPLIED_PROJECTS_ALIAS)
@@ -426,7 +504,7 @@ class ManageAppliedProject(BaseComponent):
 
     #region manage projects
 
-    def update_config(self, template_config_path: str, confirm: bool = True, need_pause: bool = False):
+    def update_config(self, template_config_path: str, confirm: bool = True, need_pause: bool = False) -> bool:
         """ Изменить config.yml используя шаблон
 
         Args:
@@ -436,63 +514,6 @@ class ManageAppliedProject(BaseComponent):
         """
         inst_path = Path(self.config_path).parent.parent
         log.info(f'Корневой каталог текущего инстанса: {str(inst_path)}')
-
-        def _update_CommentedMap(template_config: CommentedMap, dst_config: CommentedMap):
-            for k,v in template_config.items():
-                if type(v) == CommentedMap:
-                    if k in dst_config.keys():
-                        if dst_config[k] is not None:
-                            _update_CommentedMap(v, dst_config[k])
-                        else:
-                            dst_config[k] = v
-                    else:
-                        dst_config[k] = v
-                        _update_CommentedMap(v, dst_config[k])
-                elif type(v) == CommentedSeq:
-                    if k in dst_config.keys():
-                        dst_config[k] = v
-                    else:
-                        dst_config[k] = v
-                        _update_CommentedMap(v, dst_config[k])
-                else:
-                    dst_config[k] = v
-
-        def _show_CommentedMap(template_config: CommentedMap, dst_config: CommentedMap, indent: int = 1):
-            indent_template = "  "
-            mark = ""
-            for k,v in template_config.items():
-                if type(v) == CommentedMap:
-                    dst_config_next_level = None
-                    if dst_config is not None and k in dst_config.keys():
-                        mark = ""
-                        dst_config_next_level = dst_config[k]
-                    else:
-                        mark = _colorize_green('[+]')
-                    log.info(f"{(indent)*indent_template}{mark}{k}:")
-                    _show_CommentedMap(v, dst_config_next_level, (indent+1))
-                elif type(v) == CommentedSeq:
-                    if k.lower() == "repository":
-                        maxlen = 0
-                        for repo in v:
-                            if maxlen < len(repo.get("@folderName")):
-                                maxlen = len(repo.get("@folderName"))
-                        for repo in v:
-                            log.info(f'{(indent)*indent_template}{_colorize_cyan("[*]")}folder: {_colorize_green(repo.get("@folderName").ljust(maxlen)):} solutiontype: {_colorize_green(repo.get("@solutionType"))}  url: {_colorize_green(repo.get("@url"))}')
-                    else:
-                        for r in v:
-                            log.info(f"{(indent)*indent_template}{r}")
-                else:
-                    if dst_config is not None and k in dst_config.keys():
-                        if v == dst_config[k]:
-                            mark = "[.]"
-                            value = f"'{v}'"
-                        else:
-                            mark = _colorize_cyan('[*]')
-                            value = f"'{dst_config[k]}' -> '{v}'"
-                    else:
-                        mark = _colorize_green('[+]')
-                        value = f"'{v}'"
-                    log.info(f"{(indent)*indent_template}{mark}{k}: {value}")
 
         log.info(f'Чтение исходного config.yml: {self.config_path}')
         dst_config = yaml_tools.load_yaml_from_file(self.config_path)
@@ -510,8 +531,12 @@ class ManageAppliedProject(BaseComponent):
         if answ=='y' or answ=='Y':
             _update_CommentedMap(template_config, dst_config)
             yaml_tools.yaml_dump_to_file(dst_config, self.config_path)
+            result = True
+        else:
+            result = False
         if need_pause or need_pause is None:
             pause()
+        return result
 
     def create_project(self, project_config_path: str, package_path:str = "",
                        need_import_src:bool = False, confirm: bool = True,
@@ -541,7 +566,8 @@ class ManageAppliedProject(BaseComponent):
                 log.error('Не найден модуль rxcmd')
                 raise RuntimeError('Не найден модуль rxcmd')
 
-            _show_config(project_config_path)
+            _show_config2(project_config_path, self.config_path,
+                          f"Предлагаемые изменения config.yml ({_colorize_green('Новые значения')}, {_colorize_yellow('Текущие значения')})")
             answ = input("Создать новый проект? (y,n):") if confirm else 'y'
             if answ=='y' or answ=='Y':
                 # остановить сервисы
@@ -674,9 +700,13 @@ class ManageAppliedProject(BaseComponent):
                     break
 
         while (True):
-            _show_config(project_config_path)
+            _show_config2(project_config_path, self.config_path,
+                          f"Предлагаемые изменения config.yml ({_colorize_green('Новые значения')}, {_colorize_yellow('Текущие значения')})")
             answ = input("Переключиться на указанный проект? (y,n):") if confirm else 'y'
             if answ=='y' or answ=='Y':
+                src_config = yaml_tools.load_yaml_from_file(project_config_path)
+                dst_config = yaml_tools.load_yaml_from_file(self.config_path)
+
                 # остановить сервисы
                 log.info(_colorize_green("Остановка сервисов"))
                 all = All(self.config)
@@ -684,16 +714,10 @@ class ManageAppliedProject(BaseComponent):
 
                 # скорректировать etc\config.yml
                 log.info(_colorize_green("Корректировка config.yml"))
-                src_config = yaml_tools.load_yaml_from_file(project_config_path)
-                dst_config = yaml_tools.load_yaml_from_file(self.config_path)
-                dst_config["services_config"]["DevelopmentStudio"]['REPOSITORIES']["repository"]  = src_config["services_config"]["DevelopmentStudio"]['REPOSITORIES']["repository"].copy()
-                dst_config["variables"]["purpose"] = src_config["variables"]["purpose"]
-                dst_config["variables"]["database"] = src_config["variables"]["database"]
-                dst_config["variables"]["home_path"] = src_config["variables"]["home_path"]
-                dst_config["variables"]["home_path_src"]  = src_config["variables"]["home_path_src"]
-                # костыль по быстрому, чтобы project_config_path была нужного типа
-                dst_config["variables"]["project_config_path"]  = dst_config["variables"]["database"]
-                dst_config["variables"]["project_config_path"] = project_config_path
+
+                # скорректировать etc\config.yml
+                log.info(_colorize_green("Корректировка config.yml"))
+                dst_config = _update_sungero_config(project_config_path, self.config_path)
                 yaml_tools.yaml_dump_to_file(dst_config, self.config_path)
                 time.sleep(2)
 
@@ -841,13 +865,9 @@ services_config:
             log.info(f"Создан файл для временного _ConfigSettings.xml: {config_settings_file_name}")
 
             # подготовить специальный config.yml с проектом, чьи исходники надо открыть
-            src_config = yaml_tools.load_yaml_from_file(project_config_path)
-            dst_config = yaml_tools.load_yaml_from_file(self.config_path)
-            dst_config["services_config"]["DevelopmentStudio"]['REPOSITORIES']["repository"]  = src_config["services_config"]["DevelopmentStudio"]['REPOSITORIES']["repository"].copy()
-            dst_config["variables"]["purpose"] = src_config["variables"]["purpose"]
-            dst_config["variables"]["database"] = src_config["variables"]["database"]
-            dst_config["variables"]["home_path"] = src_config["variables"]["home_path"]
-            dst_config["variables"]["home_path_src"]  = src_config["variables"]["home_path_src"]
+            dst_config = _update_sungero_config(project_config_path, self.config_path)
+            yaml_tools.yaml_dump_to_file(dst_config, self.config_path)
+            time.sleep(2)
             # отключить возможность публикации
             dst_config["services_config"]["DevelopmentStudio"]["LOCAL_WEB_RELATIVE_PATH"] = ""
             dst_config["services_config"]["DevelopmentStudio"]["LOCAL_SERVER_HTTP_PORT"] = ""
