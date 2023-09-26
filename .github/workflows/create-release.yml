@@ -29,7 +29,7 @@ jobs:
         uses: actions/upload-artifact@v3
         with:
           name: changelog
-          path: app/CHANGELOG.md
+          path: "${{ steps.git-cliff.outputs.changelog }}"
 
   create_release_bin:
     runs-on: ubuntu-latest
