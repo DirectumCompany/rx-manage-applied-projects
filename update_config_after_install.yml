@@ -1,5 +1,3 @@
-# Variables that you can use in this configuration file.
-# The result configuration file is templated by the Jinja2 template engine.
 variables:
     purpose: 'назначение проекта'
     database: 'база данных'
@@ -16,9 +14,5 @@ common_config:
     WIDGETS_ORLEANS_SILO_MONGO_CLUSTERING_DATABASE_NAME: 'CLUSTERING_{{ database }}'
 services_config:
     DevelopmentStudio:
-        SERVICE_RUNNER_CONFIG_PATH: '...Корневой_каталог_инстансов...\{{ instance_name }}\etc\_{{ instance_name }}\_services_config\ServiceRunner\_ConfigSettings.xml'
+        SERVICE_RUNNER_CONFIG_PATH: '{{ instance_root_path }}\{{ instance_name }}\etc\_{{ instance_name }}\_services_config\ServiceRunner\_ConfigSettings.xml'
         GIT_ROOT_DIRECTORY: '{{ home_path_src }}'
-
-manage_applied_projects:
-    postgresql_bin: '...путь_к_bin_каталогу_PostgreSQL...'
-    run_dds_after_set_project: 'True'

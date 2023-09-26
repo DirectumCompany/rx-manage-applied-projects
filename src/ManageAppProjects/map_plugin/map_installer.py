@@ -6,12 +6,13 @@ from typing import Optional, Dict, Any, List, OrderedDict
 import termcolor
 import time
 import shutil
+import inspect
 from pathlib import PurePath, Path
 import os
 import sys
 import json
 from ui_installer.lib.click import pause
-from ruamel.yaml import CommentedMap, CommentedSeq
+from ruamel.yaml import CommentedMap, CommentedSeq, scalarstring
 
 
 from fire.formatting import Bold
@@ -442,7 +443,7 @@ def _update_sungero_config(project_config_path, sungero_config_path):
     template_config = yaml_tools.load_yaml_from_file(project_config_path)
     dst_config = yaml_tools.load_yaml_from_file(sungero_config_path)
     dst_config = _update_CommentedMap(template_config, dst_config)
-    dst_config["variables"]["project_config_path"] = project_config_path
+    dst_config["variables"]["project_config_path"] = scalarstring.SingleQuotedScalarString(project_config_path)
     return dst_config
 
 def _update_CommentedMap(template_config: CommentedMap, dst_config: CommentedMap):
@@ -1188,7 +1189,14 @@ distributions:
         else:
             log.info(f'dotnet.exe:    {_colorize_green("Ok")}')
 
-        result_message = check_dotnet_requirement_version('sdk')
+        # В RX 4.7 добавлен второй аргумент в check_dotnet_requirement_version()
+        if (len(inspect.getfullargspec(check_dotnet_requirement_version).args) == 1):
+          result_message = check_dotnet_requirement_version('sdk') #TODO!!!
+        else:
+          dotnet_requirements_file_path = os.path.join(os.path.split(self.config_path)[0], r'plugins\platform_plugin\dotnet_requirements.yml')
+          result_message = check_dotnet_requirement_version('sdk', dotnet_requirements_file_path) #TODO!!!
+
+
         if result_message:
             log.info(f'Required .Net: {_colorize_red(result_message)}')
         else:

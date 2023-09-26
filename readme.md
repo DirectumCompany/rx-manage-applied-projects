@@ -1,26 +1,42 @@
-# Компонента Manage Applied Projects для управления прикладными проектами
+# Плагин Manage Applied Projects для управления инстансами и прикладными проектами DirectumRX
 
-Прикладной проект  - набор, состоящий из конкретного набора исходного кода (два и более репозиториев), базы данных и хранилища документов.
+## Введение
+
+* **Инстанс RX** - именованный набор сервисов RX и пула и сайта в IIS.
+* **Прикладной проект ** - набор, состоящий из конкретного набора исходного кода (два и более репозиториев), базы данных и хранилища документов.
 
 В практической деятельности прикладному разработчику приходится работать в следующих условиях:
 
-* в оперативном доступе нужны несколько разных версий Directum RX;
+* в оперативном доступе нужны несколько разных версий Directum RX, а также иметь возможность оперативно развернуть конкретный билд DirectumRX;
 * если в тиражируемых решениях приходится разрабатывать SQL-запросы, то нужна возможность быстро переключаться между Microsoft SQL Server  и PostgreeSQL;
 * даже работая с одной версией Directum RX, нужна возможность оперативного переключения между разными прикладными проектами. Например, чтобы посмотреть/прорецензировать изменения из соседней ветке, которую не хотелось бы публиковать в БД текущего проекта;
 * иногда возникает необходимость создать новый проект и хорошо бы это сделать без  переустановки Directum RX;
 * и т.д.
 
-Типовой подход решения подобных ситуаций - создавать виртуальные машины под каждую версию Directum RX или даже под каждый прикладной проект. Такой подход не только требует существенных серверных ресурсов под виртуальные машины, но и довольно неудобен в практической работе (например, на каждой виртуальной машине приходится устанавливать и поддерживать в актуальном состоянии необходимый инструментарий).
+Типовой подход решения подобных ситуаций - создавать виртуальные машины под каждую версию Directum RX или даже под каждый прикладной проект. Такой подход не только требует существенных серверных ресурсов под виртуальные машины, но и довольно неудобен в практической работе. Например, на каждой виртуальной машине приходится устанавливать и поддерживать в актуальном состоянии необходимый инструментарий.
 
-Штатный инсталлятор Directum RX подходит для установки первого и единственного инстанса Directum RX. Начиная с версии 4.2 DirectumLauncher позволяет установить дополнительные инстансы, но при этом требуется знать некоторые недокументированные возможности DirectumLauncher.
+Штатный инсталлятор Directum RX заточен на установку первого и единственного инстанса Directum RX. Начиная с версии 4.2 DirectumLauncher позволяет:
 
-Также DirectumLauncher позволяет создавать новые проекты и переключаться между проектами относительно небольшим количеством телодвижений. Но для этого необходимо знать еще больше особенностей работы DirectumLauncher (большинство которых не документированы), а также в правильной последовательности выполнять нужные команды. В результате сложность таких действий и вероятность ошибки достаточно велики.
+* установить несколько копий Directum RX на одну машину;
+* относительно простыми действиями создавать новые прикладные проекты и переключаться между ними.
 
-Компонента Manage Applied Tools облегчает установку нескольких инстансов RX на одну машину, переключение установленных инстансов между разными прикладными проектами, а также упрощает ряд рутинных операций, с которыми сталкиваются прикладные разработчики. 
+Однако:
+
+* для этого необходимо знать еще больше особенностей работы DirectumLauncher (многие из которых не документированы), а также в правильной последовательности выполнять нужные команды. В результате сложность таких действий и вероятность ошибки достаточно велики;
+* установка Directum RX требует заполнения довольно значительного количества параметров, что требует заметного времени;
+* каждый проект как минимум требует репозитория с исходниками стандартной прикладной разработки, а это 700-800 Mb. 
+
+Компонента Manage Applied Tools облегчает установку нескольких инстансов RX на одну машину, переключение установленных инстансов между разными прикладными проектами, а также упрощает ряд рутинных операций, с которыми сталкиваются прикладные разработчики. Происходит это за счет:
+
+* использования в config.yml переменных, в которые выносятся значения, уникальные для инстансов или прикладных проектов;
+* сохранения в специальных файлах значений, которые нужно вводить при установке инстанса;
+* специальных скриптов, упрощающих установку нового инстанса Directum RX;
+* сохранения в специальных файлах описания проектов значений переменных, уникальных для каждого прикладного проекта;
+* реализации набор команд, позволяющих создавать, клонировать и менять прикладные проекты на основании описаний прикладных проектов;
 
 Внимание! Компонента НЕ предназначена для управления продуктивными серверами.
 
-Текущая версия совместима с DirectumLauncher 4.2, DirectumLauncher 4.3, DirectumLauncher 4.4, DirectumLauncher 4.5
+Текущая версия совместима с Directum RX 4.2-4.8.
 
 Демонстрация установки Directum RX с использованием Manage Applied Projects - см. [Rutube](https://rutube.ru/video/private/872373ea98596d4dbbe437743e85a4d0/?p=hPiyutwT6D34hYTCSHYz7Q), [Youtube](https://www.youtube.com/watch?v=2tvFTjQrrn4).
 
@@ -40,52 +56,50 @@
 Подготовка к установке инстансов выполняется один раз для каждого рабочего места:
 
 1. Установите Directum RX штатным инсталлятором. После установки скопируйте config.yml и папку с сертификатом, который используют сервисы для общения друг с другом. После этого Directum RX можно удалить - см. раздел "Удаление инстанса".
-2. Подготовьте структуру каталогов:
-   * создайте корневой каталог инстансов. Например, `c:\rx_ver`;
-   * создайте корневой каталог логов. Например, `c:\rx_logs`;
-   * создайте корневой каталог проектов. Например, `c:\rx`;
+2. Подготовьте каталоги:
+   * корневой каталог инстансов. Например, `c:\rx_ver`. Внутри этого каталога будут создаваться каталоги для устанавливаемых инстансов;
+   * корневой каталог логов. Например, `c:\rx_logs`. Внутри этого каталога будут создаваться каталоги с логами каждого инстанса.
+   * создайте корневой каталог проектов. Например, `c:\rx`. В этом каталоге будем создавать файлы с описаниями прикладных проектов, а также каталоги для хранения исходников и данных прикладных проектов.
 3. В корневом каталоге инстансов создайте каталог для хранения сертификата сервисов. Например, c:\rx_ver\data_protection. Скопируйте в каталог pfx- и cer-файлы сертификата, сохраненные на шаге №1. 
-4. Скопируйте файлы update_config_before_install.yml и update_config_after_install.yml в корневой каталог конфигов проектов (`c:\rx`)
-5. Отредактируйте файлы update_config_before_install.yml и update_config_after_install.yml. Эти файлы будут использоваться в дальнейшем для корректировки config.yml устанавливаемых инстансов. Что следует учесть:
+4. Клонируйте репозиторий компоненты Manage Applied Tools
+5. Скопируйте файлы update_config_before_install.yml и update_config_after_install.yml из каталога компоненты и отредактируйте их. Эти файлы будут использоваться в дальнейшем для корректировки config.yml устанавливаемых инстансов. Что следует учесть:
    * необходимо заполнить значения, отмеченные троеточием `...`
    * значения брать из config.yml, сохраненного на шаге №1.за исключением:
      * в свойстве DATA_PROTECTION_CERTIFICATE_FILE в update_config_before_install.yml укажите путь к pfx-файл, скопированному в каталог хранения сертификата сервисов
-     * в параметре CONNECTION_STRING в update_config_before_install.yml  параметр с именем базы данных (`initial catalog` для mssql и `database` для postgres) оставить пустым
+     * в параметре CONNECTION_STRING в update_config_before_install.yml  параметр с именем базы данных (`initial catalog` для mssql и `database` для postgres) укажите БД, которая будет использоваться в ходе первоначальной установки инстанса. Например, `rx_install`. Эта БД будет удаляться и создаваться заново при установке каждого инстанса
+     * в параметре home_path в update_config_before_install.yml  указать каталог, который будет использоваться в качестве домашнего каталога во время установки инстанса. Например, `c:\rx\rx_install`.
 
 Получится примерно так. Файл _update_config_before_install.yml_:
 
 ```
-# Variables that you can use in this configuration file.
-# The result configuration file is templated by the Jinja2 template engine.
 variables:
     host_fqdn: 'localhost'
     protocol: 'http'
-    #protocol: 'https'
-    home_path: ''
+    home_path: 'c:\rx\rx_install'
+devstand_config: &devstand_config
+    SAVE_NOCODE_SETTINGS_TO_SOURCES: 'true'
+    DEV_STUDIO_CONFIG_PATH: '{{ instance_root_path }}\{{ instance_name }}\etc\_builds\DevelopmentStudio\bin\_ConfigSettings.xml'
 common_config: 
     DATABASE_ENGINE: 'mssql'
-    CONNECTION_STRING: 'data source=SQLSERVER;initial catalog=;user id=sa;Password=sa_password'
+    CONNECTION_STRING: 'data source=SQLSERVER;initial catalog=rx_install;user id=sa;Password=sa_password'
     QUEUE_CONNECTION_STRING: 'virtualhost=rx;hostname=localhost;port=5672;username=admin;password=admin_password;Exchange=exchange_install'
-    #DATABASE_ENGINE: 'postgres'
-    #CONNECTION_STRING: 'server=localhost;port=5432;database=;user id=dbadmin;Password=dbadmin_password'
-
     DATA_PROTECTION_CERTIFICATE_FILE: 'C:\rx_ver\data_protection\cert.pfx'
     DATA_PROTECTION_CERTIFICATE_FILE_PASSWORD: 'f4bc3790-11e4-45f2-b3de-1acca662b8f4'
     MONGODB_CONNECTION_STRING: 'mongodb://admin:password@127.0.0.1:27017'
     AUTHENTICATION_USERNAME: 'Service User'
     AUTHENTICATION_PASSWORD: '11111'
 services_config:
-    #IIS:
-    #    ssl_cert_thumbprint: ''
     DevelopmentStudio:
-        COMPANY_CODE: 'DirRX'
+        COMPANY_CODE: 'OurCompany'
+        UNIQUE_NAMES_IN_OVERRIDES: true
+manage_applied_projects:
+    postgresql_bin: 'C:\Program Files\PostgreSQL\14\bin'
+    run_dds_after_set_project: 'True'
 ```
 
 Файл _update_config_after_install.yml_:
 
 ```
-# Variables that you can use in this configuration file.
-# The result configuration file is templated by the Jinja2 template engine.
 variables:
     purpose: 'назначение проекта'
     database: 'база данных'
@@ -96,27 +110,24 @@ common_config:
     DATABASE_ENGINE: 'mssql'
     CONNECTION_STRING: 'data source=SQLSERVER;initial catalog={{ database }};user id=sa;Password=sa_password'
     QUEUE_CONNECTION_STRING: 'virtualhost=rx;hostname=localhost;port=5672;username=admin;password=admin_password;Exchange=Exchange_{{ instance_name }}'
-    #DATABASE_ENGINE: 'postgres'
-    #CONNECTION_STRING: 'server=localhost;port=5432;database={{ database }};user id=dbadmin;Password=dnadmin_password'
     WIDGETS_ORLEANS_SILO_MONGO_GRAIN_STORAGE_DATABASE_NAME: 'GRAIN_{{ database }}'
     WIDGETS_ORLEANS_SILO_MONGO_CLUSTERING_DATABASE_NAME: 'CLUSTERING_{{ database }}'
 services_config:
     DevelopmentStudio:
-        SERVICE_RUNNER_CONFIG_PATH: 'C:\rx_ver\{{ instance_name }}\etc\_{{ instance_name }}\_services_config\ServiceRunner\_ConfigSettings.xml'
+        SERVICE_RUNNER_CONFIG_PATH: '{{ instance_root_path }}\{{ instance_name }}\etc\_{{ instance_name }}\_services_config\ServiceRunner\_ConfigSettings.xml'
         GIT_ROOT_DIRECTORY: '{{ home_path_src }}'
-
-manage_applied_projects:
-    postgresql_bin: 'C:\Program Files\PostgreSQL\14\bin'
-    run_dds_after_set_project: 'True'
 ```
+
+Если необходимо иметь возможность устанавливать инстансы  Directum RX на разные диски (например, для более эффективного использования дисков ) или для работы с разными серверами БД, то необходимо сделать дополнительные пары файлов _update_config_before_install.yml_  и _update_config_after_install.yml_.
 
 ## Установка инстанса Directum RX
 
 Установка первого и последующих инстансов Directum RX выполняется одинаково. Последовательность шагов:
 
-1. Выберите имя устанавливаемого инстанса. Как правило, в имени инстанса имеет смысл отразить версию Directum RX. Например, для установки Directum RX 4.5.30 имя инстанса можно сделать `4530`.
+1. Перед установкой инстанса:
 
-2. Подберите свободный порт(ы) для будущего инстанса. Проверить свободен тот или иной порт можно командой 
+   * выберите имя устанавливаемого инстанса. Как правило, в имени инстанса имеет смысл отразить версию Directum RX. Например, для установки Directum RX 4.5.30 имя инстанса можно сделать `4530`.
+   * подберите свободный порт(ы) для будущего инстанса. Проверить свободен тот или иной порт можно командой 
 
    ```
    netstat -an | findstr /i :номер_порта
@@ -129,93 +140,38 @@ manage_applied_projects:
      TCP    [::]:2086              [::]:0                 LISTENING
    ```
 
-3. В корневом каталоге инстансов создайте каталог с именем, равным имени будущего инстанса. Например, `c:\rx_ver\4530`.
+   * убедитесь, что в корневом каталоге инстансов отсутствует каталог с именем, равным имени будущего инстанса. Например, `c:\rx_ver\4530`.
 
-4. Скопируйте в этот каталог содержимое архива DirectumLauncher.zip.
-
-5. Установите необходимые компоненты Directum RX. Не рекомендуется копировать архивы компонент из дистрибутива в папку инстанса - занимают слишком много места на диске. Также не рекомендуется устанавливать компоненте WebHelp.zip - она занимает очень много места на диске, а справка доступна на club.directum.ru. 
-
-   Состав компонент зависит от версии RX:
-
-   * Для Directum RX 4.2
+2. Запустите установку инстанса скриптом install_instance.ps1 передав ему все необходимые параметры. Например:
 
    ```
-   do components add_package путь_к_дистрибутиву\DevelopmentStudio.zip
-   do components add_package путь_к_дистрибутиву\DeploymentTool.zip
+   powershell D:\rx-manage-applied-projects\src\ManageAppProjects\map_plugin\install_instance.ps1 ^
+                     -rx_instaler_dir_path c:\distr\rx4530 ^
+                     -instance_name 4530 ^
+                     -port 1085 ^
+                     -instance_root_dir_path c:\rx_ver ^
+                     -map_plugin_path "D:\rx-manage-applied-projects\src\ManageAppProjects\map_plugin" ^
+                     -cfg_before_install_path c:\rx_ver\update_config_before_install.yml ^
+                     -cfg_after_install_path c:\rx_ver\update_config_after_install.yml
+   
    ```
 
-   * Для Directum RX 4.3
+   Особенности установки:
 
-   ```
-   do components add_package путь_к_дистрибутиву\DevelopmentStudio.zip
-   do components add_package путь_к_дистрибутиву\DeploymentTool.zip
-   do components add_package путь_к_дистрибутиву\DirectumRX.zip
-   ```
+   * убедитесь, что в корневом каталоге инстансов отсутствует каталог с именем, равным имени будущего инстанса. Например, `c:\rx_ver\4530`
+   * по умолчанию компонента Redis не устанавливается. Но будет выполнена проверки наличия необходимых версий SDK и предложено самостоятельно принять решение о необходимости установки этой компоненты.
+   * для непосредственной установки Directum RX запускается DirectumLauncher с перезаполненным config.yml. Для установки необходимо переключить в режим "Установка"
+   * для корректного завершения установки необходимо закрыть окно с консолью, которое открывается при запуска DirectumLauncher
+   * устанавливается минимально необходимый для запуска DevelopmentStudio набор компонент. Точный состав зависит от устанавливаемой версии Directum RX.
+   * zip-файлы компонент не копируются в папку инстанса
+   * компонента WebHelp.zip не устанавливается- она занимает очень много места на диске, а справка доступна на club.directum.ru. 
+   * сразу устанавливается компонента Manage Applied Project в варианте plugin (подробнее см. раздел "Установка компоненты Manage Applied Projects)
 
-   * Для Directum RX 4.4
+3.  Создайте первый конфиг проекта. Рекомендации:
 
-   ```
-   do components add_package путь_к_дистрибутиву\DevelopmentStudio.zip
-   do components add_package путь_к_дистрибутиву\DeploymentTool.zip
-   do components add_package путь_к_дистрибутиву\DirectumRX.zip
-   ```
 
-   * Для Directum RX 4.5
-
-   ```
-   do components add_package путь_к_дистрибутиву\Platform.zip
-   do components add_package путь_к_дистрибутиву\DevelopmentStudio.zip
-   do components add_package путь_к_дистрибутиву\DeploymentTool.zip
-   do components add_package путь_к_дистрибутиву\DirectumRX.zip
-   ```
-
-   Проверьте корректность установки .Net, выполнив команду:
-
-   ```
-   do map check_sdk
-   ```
-
-   Если все компоненты .Net установлены, то можно не добавлять в DirectumLauncher компоненту Redist.zip из дистрибутива.
-
-   Если каких-то компонент не хватает, то есть два варианта:
-
-   * вручную установить недостающие компоненты, взяв их из Redist.zip
-   * добавить в DirectumLauncher компоненту Redist `do components add_package путь_к_дистрибутиву\Redist.zip`, которую можно будет после установки инстанса удалить, освободив 1Gb на диске.
-
-6. Установить компоненту Manage Applied Project. См. раздел "Установка компоненты Manage Applied Projects". Рекомендуется устанавливать как plugin.
-
-7. В каталоге `etc` скопируйте файл `config.yml.example` в `config.yml`. В созданном `config.yml` в разделе `valiables` добавьте переменную `instance_name`, в значении которой укажите имя инстанса. Например, так
-
-   ```    
-   variables:
-       instance_name: '4530'
-   ```
-
-8. Скорректируйте config.yml, выполнив команду:
-
-   ```
-   do map update_config c:\rx\update_config_before_install.yml
-   ```
-
-9. Запустите DirectumLauncher. На открывшейся странице сайта:
-
-* если установлен режим "Обновление", то переключите в режим "Установка"
-* укажите порты, которые будет использовать устанавливаемый instance
-* укажите имя БД, которая будет создана в ходе установки инстанса
-* укажите путь к каталогу с данными
-* нажмите кнопку запуска установки и дождитесь завершения установки
-* проверьте, что веб-клиент Directum RX запускается
-
-10. Скорректируйте config.yml, выполнив команду:
-
-```
-do map update_config c:\rx\update_config_after_install.yml
-```
-
-11. Создайте первый конфиг проекта. Рекомендации:
-
-* в качестве префикса в имени конфига использовать имя инстанса - это позволит легко определять какие конфиги для какого инстанса созданы
-* первый рекомендуется создать проект, в котором будет только стандартная версия Directum RX. После её настройки - создания оргструктуры, создания пользователей и т.п., этот проект можно будет использовать как основу для созданию новых проектов.
+* в качестве префикса в имени конфига использовать имя инстанса - это позволит легко определять какие конфиги для какого инстанса созданы. Например, `4530_BoxOnly.yml`.
+* первым рекомендуется создать проект, в котором будет только стандартная версия Directum RX. После её настройки - создания оргструктуры, создания пользователей и т.п., этот проект можно будет использовать как основу для созданию новых проектов.
 
 Создать конфиг можно командой 
 
@@ -259,15 +215,13 @@ services_config:
                 '@url': ''
 ```
 
-12. Создайте проект:
+4. Создайте проект:
 
 ```
 do map create_project c:\rx\4530_BoxOnly.yml --package_path=C:\rx_ver\4530\etc\_builds\DirectumRX\DirectumRXbase.dat --need_import_src=True
 ```
 
 В результате будет создан новый проект, в него будет принята стандартная прикладная разработка и приняты стандартные шаблоны документов.
-
-13. После проверки работоспособности можно будет удалить БД и каталог, которые были указаны на шаге 9.
 
 ## Создание второго проекта в инстансе
 
@@ -377,16 +331,19 @@ do.bat install_plugin <путь к репозиторию>\src\ManageAppProjects
 
 ## Удаление инстанса
 
-Чтобы удалить инстанс, необходимо выполнить следующие действия:
+Для удаления инстанса воспользуйтесь скриптом remove_instance_rx.ps1. Например 
 
-1. Остановите сервисы инстанса выполнив команду `do all down`
-2. В Диспетчер IIS удалите веб-сервер инстанса и пул приложений
-3. Удалите папку инстанса в корневом каталоге инстансов
-4. Удалить данные инстанса:
-   * папку логов инстанса
-   * конфиги проектов
-   * базы данных
-   * папки с исходниками и домашними каталогами
+```
+powershell D:\rx-manage-applied-projects\src\ManageAppProjects\map_plugin\remove_instance_rx.ps1 c:\rx_ver 4530
+```
+
+При выполнении этой команды:
+
+* будут остановлены сервисы инстанса
+* удалены пул приложений и веб-сервер инстанса
+* удален каталог инстанса
+
+Данные инстанса и конфиги проектов не удаляются.
 
 ## Формирование дистрибутивов решений
 

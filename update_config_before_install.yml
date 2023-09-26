@@ -1,10 +1,10 @@
-# Variables that you can use in this configuration file.
-# The result configuration file is templated by the Jinja2 template engine.
 variables:
     host_fqdn: 'localhost'
     protocol: 'http'
-    #protocol: 'https'
-    home_path: ''
+    home_path: '...домашний каталог на время устаноки инстанса...'
+devstand_config: &devstand_config
+    SAVE_NOCODE_SETTINGS_TO_SOURCES: 'true'
+    DEV_STUDIO_CONFIG_PATH: '{{ instance_root_path }}\{{ instance_name }}\etc\_builds\DevelopmentStudio\bin\_ConfigSettings.xml'
 common_config:
     DATABASE_ENGINE: 'mssql'
     CONNECTION_STRING: 'data source=...сервер...;initial catalog=;user id=...логин...;Password=...пароль...'
@@ -17,7 +17,9 @@ common_config:
     AUTHENTICATION_USERNAME: 'Service User'
     AUTHENTICATION_PASSWORD: '...пароль_системных_пользователей...'
 services_config:
-    #IIS:
-    #    ssl_cert_thumbprint: '...отпечаток_сертификата_для_SLL...'
     DevelopmentStudio:
         COMPANY_CODE: '...Код_компании_разработчика....'
+        UNIQUE_NAMES_IN_OVERRIDES: true
+manage_applied_projects:
+    postgresql_bin: '...путь_к_bin_каталогу_PostgreSQL...'
+    run_dds_after_set_project: 'True'
