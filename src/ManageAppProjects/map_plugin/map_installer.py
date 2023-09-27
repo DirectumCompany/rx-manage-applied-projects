@@ -5,6 +5,7 @@ from pprint import pprint, pformat
 from typing import Optional, Dict, Any, List, OrderedDict
 import termcolor
 import time
+from dateutil.parser import parse
 import shutil
 import inspect
 from pathlib import PurePath, Path
@@ -467,6 +468,19 @@ def _update_CommentedMap(template_config: CommentedMap, dst_config: CommentedMap
             dst_config[k] = v
     return dst_config
 
+def is_date(string, fuzzy=False):
+    """
+    Return whether the string can be interpreted as a date.
+
+    :param string: str, string to check for date
+    :param fuzzy: bool, ignore unknown tokens in string if True
+    """
+    try: 
+        parse(string, fuzzy=fuzzy)
+        return True
+
+    except ValueError:
+        return False
 #endregion
 
 @component(alias=MANAGE_APPLIED_PROJECTS_ALIAS)
@@ -1112,9 +1126,12 @@ distributions:
         for root_log in log_folders:
             for root, dirs, files in os.walk(root_log):
                 for file in files:
-                    date_subs = file[-14:-4]
-                    if date_subs <= limit_date:
-                        os.remove(os.path.join(root, file))
+                    date_file = file.split('.')[-2]
+                    if not is_date(date_file):
+                        date_file = file.split('.')[-3]
+                    if is_date(date_file):
+                        if date_file <= limit_date:
+                            os.remove(os.path.join(root, file))
         if need_pause or need_pause is None:
             pause()
 
