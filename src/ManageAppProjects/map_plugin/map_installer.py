@@ -5,13 +5,13 @@ from pprint import pprint, pformat
 from typing import Optional, Dict, Any, List, OrderedDict
 import termcolor
 import time
-from dateutil.parser import parse
 import shutil
 import inspect
 from pathlib import PurePath, Path
 import os
 import sys
 import json
+import re
 from ui_installer.lib.click import pause
 from ruamel.yaml import CommentedMap, CommentedSeq, scalarstring
 
@@ -468,19 +468,8 @@ def _update_CommentedMap(template_config: CommentedMap, dst_config: CommentedMap
             dst_config[k] = v
     return dst_config
 
-def is_date(string, fuzzy=False):
-    """
-    Return whether the string can be interpreted as a date.
-
-    :param string: str, string to check for date
-    :param fuzzy: bool, ignore unknown tokens in string if True
-    """
-    try: 
-        parse(string, fuzzy=fuzzy)
-        return True
-
-    except ValueError:
-        return False
+def is_date(string):
+    return re.fullmatch(r"\d{4}-\d{2}-\d{2}", string) != None
 #endregion
 
 @component(alias=MANAGE_APPLIED_PROJECTS_ALIAS)
