@@ -663,7 +663,7 @@ class ManageAppliedProject(BaseComponent):
             elif answ=='n' or answ=='N':
                 break
 
-    def set(self, project_config_path: str = None, confirm: bool = True, rundds: bool = None, need_pause: bool = False) -> None:
+    def set(self, project_config_path: str = None, confirm: bool = True, rundds: bool = None, need_pause: bool = False, need_convert_db = True) -> None:
         """ Переключиться на указанный прикладной проект
 
         Args:
@@ -740,6 +740,8 @@ class ManageAppliedProject(BaseComponent):
                 log.info(_colorize_green("Подъем сервисов"))
                 all2 = All(get_config_model(self.config_path))
                 all2.config_up()
+                if need_convert_db:
+                    SungeroDB(get_config_model(self.config_path)).convert()
                 all2.up()
                 all2.check()
 
