@@ -1199,10 +1199,10 @@ distributions:
 
         # В RX 4.7 добавлен второй аргумент в check_dotnet_requirement_version()
         if (len(inspect.getfullargspec(check_dotnet_requirement_version).args) == 1):
-          result_message = check_dotnet_requirement_version('sdk') #TODO!!!
+          result_message = check_dotnet_requirement_version('sdk')
         else:
           dotnet_requirements_file_path = os.path.join(os.path.split(self.config_path)[0], r'plugins\platform_plugin\dotnet_requirements.yml')
-          result_message = check_dotnet_requirement_version('sdk', dotnet_requirements_file_path) #TODO!!!
+          result_message = check_dotnet_requirement_version('sdk', dotnet_requirements_file_path)
 
 
         if result_message:

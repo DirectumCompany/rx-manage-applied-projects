@@ -152,18 +152,21 @@ if ($version -eq "4.2") {
 .\do.bat dds install
 .\do.bat install_plugin $map_plugin_path
 
-.\do.bat map check_sdk
-# попросить ввести тег версии в формате v9.9.9999.9
-Do {
-  $need_add_redist = Read-Host ('Требуется установить компоненту Redist (y/n)?')
-  if ($need_add_redist -in @('y', 'n', 'Y', 'N') ) {
+
+# Проверить версии SDK
+Do 
+{
+  $check_result = (.\do.bat map check_sdk)  | Out-String
+  $match_result = $check_result | Select-String -Pattern ' Ok' -AllMatches
+  if ($match_result.Matches.Length -ne 4) {
+    .\do.bat map check_sdk
+    Write-Host "Установите необходимые компоненты"
+    pause  
+  }
+  else {
     break
   }
 } While ($true)
-if ($need_add_redist -in @('y', 'Y'))
-{
-  .\do.bat components add_package $rx_instaler_dir_path\Redist.zip
-}
 
 #подготовить config.yml к установке
 .\do.bat map update_config $cfg_before_install_path --confirm=False  --need_pause=False
