@@ -2,6 +2,7 @@ variables:
     host_fqdn: 'localhost'
     protocol: 'http'
     home_path: '...домашний каталог на время устаноки инстанса...'
+    home_path_src: '...домашний каталог на время устаноки инстанса...'    
 devstand_config: &devstand_config
     SAVE_NOCODE_SETTINGS_TO_SOURCES: 'true'
     DEV_STUDIO_CONFIG_PATH: '{{ instance_root_path }}\{{ instance_name }}\etc\_builds\DevelopmentStudio\bin\_ConfigSettings.xml'
