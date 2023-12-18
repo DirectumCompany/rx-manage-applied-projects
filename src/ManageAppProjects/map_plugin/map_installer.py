@@ -1212,6 +1212,26 @@ distributions:
         if need_pause or need_pause is None:
             pause()
 
+    def run_script(self, script_filename: str, *args: Any) -> None:
+        """Запуск python-скрипта
+
+        Args:
+            script_filename: путь к запускаемому файлу
+            *args: дополнительные параметры, которые будут переданы в запускаемый скрипт в виде переменных
+
+        """
+        with open(_get_check_file_path(script_filename), 'r', encoding='utf-8') as f:
+            script = f.read()
+            args_dict = {}
+            for arg in args:
+                sep_ids = arg.find('=')
+                if sep_ids != -1:
+                    args_dict[arg[:sep_ids]] = arg[sep_ids+1:]
+        # передать ссылку на экземпляр класса в качестве предопределенной переменной
+        args_dict["self_map"] = self
+
+        exec(script, globals(), args_dict)
+
     @staticmethod
     def help() -> None:
         log.info('do map set - переключиться на проект, описаный в указанном yml-файла')
@@ -1231,5 +1251,6 @@ distributions:
         log.info('do map url - показать url для подключения к веб-клиенту текущего инстанса')
         log.info('do map check_config - показать ключевую информацию из указанного yml-файла описания проекта')
         log.info('do map check_sdk - проверить наличие необходимых компонент git и .Net')
+        log.info('do map run_script - запустить python-скрипт')
 
     #endregion
