@@ -138,8 +138,8 @@ if ($version -eq "4.2") {
   .\do.bat components add_package $rx_instaler_dir_path\DevelopmentStudio.zip 
   .\do.bat components add_package $rx_instaler_dir_path\DirectumRX.zip 
   .\do.bat components add_package $rx_instaler_dir_path\DeploymentTool.zip 
-} elseif ($version -in @("4.5", "4.6", "4.7", "4.8")) {
-  Write-Host @("4.5", "4.6", "4.7", "4.8")
+} elseif ($version -in @("4.5", "4.6", "4.7", "4.8", "4.9")) {
+  Write-Host @("4.5", "4.6", "4.7", "4.8", "4.9")
   .\do.bat components add_package $rx_instaler_dir_path\Platform.zip
   .\do.bat components add_package $rx_instaler_dir_path\DevelopmentStudio.zip 
   .\do.bat components add_package $rx_instaler_dir_path\DirectumRX.zip 

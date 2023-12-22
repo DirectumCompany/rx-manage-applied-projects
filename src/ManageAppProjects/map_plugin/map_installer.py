@@ -562,10 +562,10 @@ class ManageAppliedProject(BaseComponent):
             * если делать при загрузке - то модули-зависимости могут не успеть подгрузиться
             * DDS и DirectumRX может не быть не установлены и надо об этом сообщать
             """
-            if 'sungero_deploy.tools.rxcmd' in sys.modules:
-                from sungero_deploy.tools.rxcmd import RxCmd
-            elif 'rx_plugin.rxcmd' in sys.modules:
+            if 'rx_plugin.rxcmd' in sys.modules:
                 from rx_plugin.rxcmd import RxCmd
+            elif 'sungero_deploy.tools.rxcmd' in sys.modules:
+                from sungero_deploy.tools.rxcmd import RxCmd
             else:
                 log.error('Не найден модуль rxcmd')
                 raise RuntimeError('Не найден модуль rxcmd')
