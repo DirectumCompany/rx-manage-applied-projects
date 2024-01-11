@@ -635,7 +635,7 @@ do map run_script --script_filename=script_example.py
 * дополнительные параметры, которые будут доступны в коде скрипта в качестве локальных переменных. Пример вызова скрипта с доп.параметрами:
 
 ```
-do map run_script --script_filename=script_example.py --arg1=value1 --arg2=value2
+do map run_script --script_filename=script_example.py arg1=value1 arg2=value2
 ```
 
 В файле script_example.py приведен пример скрипта, демонстрирующий некоторые возможности, доступные в скриптах.
