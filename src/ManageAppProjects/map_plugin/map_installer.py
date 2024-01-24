@@ -210,6 +210,12 @@ def _get_url(config) -> None:
     srv_cfgs = config.services_config
     return f'{vars["protocol"]}://{vars["host_fqdn"]}:{vars["http_port"]}/{srv_cfgs["SungeroWebServer"]["WEB_HOST_PATH_BASE"]}/#'
 
+def _get_integration_url(config) -> None:
+    """Вернуть  url для IntegrationService"""
+    vars = config.variables
+    srv_cfgs = config.services_config
+    return f'{vars["protocol"]}://{vars["host_fqdn"]}:{vars["http_port"]}/Integration/odata'
+
 def _get_check_file_path(config_path: str) -> Path:
     if not config_path:
         raise ValueError("config_path does not set.")
@@ -1133,6 +1139,7 @@ distributions:
             need_pause: признак необходимости в конце сделать паузу и ожидать нажатия клавиши пользователем. По умолчанию - False
         """
         log.info(f'Веб-клиент:          {_get_url(self.config)}')
+        log.info(f'IntegrationService:  {_get_integration_url(self.config)}')
         _show_config(self.config_path)
         if need_pause or need_pause is None:
             pause()
