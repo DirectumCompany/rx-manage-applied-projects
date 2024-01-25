@@ -658,7 +658,8 @@ class ManageAppliedProject(BaseComponent):
             elif answ=='n' or answ=='N':
                 break
 
-    def set(self, project_config_path: str = None, confirm: bool = True, rundds: bool = None, need_pause: bool = False, need_convert_db = True) -> None:
+    def set(self, project_config_path: str = None, confirm: bool = True, rundds: bool = None, 
+           need_pause: bool = False, need_convert_db = True, need_check = True) -> None:
         """ Переключиться на указанный прикладной проект
 
         Args:
@@ -666,6 +667,8 @@ class ManageAppliedProject(BaseComponent):
             confirm: признак необходимости выводить запрос на создание проекта. По умолчанию - True
             rundds: признак необходимости запускать DDS. По умолчанию - None, т.е. будет браться значение, определенное в config.yml
             need_pause: признак необходимости в конце сделать паузу и ожидать нажатия клавиши пользователем. По умолчанию - False
+            need_convert_db: признак необходимости запустить конвертацию БД. По умолчанию - True
+            beed_check: признак необходимости проверки отклика сервисов после перзапуска. По умолчанию - True
         """
 
         if project_config_path is None:
@@ -738,7 +741,8 @@ class ManageAppliedProject(BaseComponent):
                 if need_convert_db:
                     SungeroDB(get_config_model(self.config_path)).convert()
                 all2.up()
-                all2.check()
+                if need_check:
+                    all2.check()
 
                 # обновить конфиги DevelopmentStudio и DeploymentToolUI
                 # Подгрузка модулей выполняется именно тут, т.к:
