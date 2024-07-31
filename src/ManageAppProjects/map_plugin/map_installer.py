@@ -1238,6 +1238,8 @@ distributions:
                 sep_ids = arg.find('=')
                 if sep_ids != -1:
                     args_dict[arg[:sep_ids]] = arg[sep_ids+1:]
+                else:
+                    args_dict[arg] = True
         # передать ссылку на экземпляр класса в качестве предопределенной переменной
         args_dict["self_map"] = self
 
