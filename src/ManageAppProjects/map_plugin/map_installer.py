@@ -133,7 +133,7 @@ def _copy_database_mssql(config: Config, src_db_name: str, dst_db_name: str) -> 
             case
             when Type = 'D' then '.mdf'
             when Type = 'L' then '_log.ldf'
-            when Type = 'F' then '\FullTextData'
+            when Type = 'F' then '\\FullTextData'
             end + ''''
         from
         #BackupFiles
@@ -658,7 +658,7 @@ class ManageAppliedProject(BaseComponent):
             elif answ=='n' or answ=='N':
                 break
 
-    def set(self, project_config_path: str = None, confirm: bool = True, rundds: bool = None, 
+    def set(self, project_config_path: str = None, confirm: bool = True, rundds: bool = None,
            need_pause: bool = False, need_convert_db = True, need_check = True) -> None:
         """ Переключиться на указанный прикладной проект
 
@@ -1070,7 +1070,7 @@ services_config:
 project: ''
 
 # mtd-файл, из которого берется номер текущей версии
-mtd_for_version: '....Solution.Shared\Module.mtd'
+mtd_for_version: '....Solution.Shared\\Module.mtd'
 
 # XML-конфиги, которые используются для формирования пакета разработки в процессе увеличения версии решения
 devpacks_for_increment_version:
