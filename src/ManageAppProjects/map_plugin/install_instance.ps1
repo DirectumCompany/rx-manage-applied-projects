@@ -138,13 +138,21 @@ if ($version -eq "4.2") {
   .\do.bat components add_package $rx_instaler_dir_path\DevelopmentStudio.zip 
   .\do.bat components add_package $rx_instaler_dir_path\DirectumRX.zip 
   .\do.bat components add_package $rx_instaler_dir_path\DeploymentTool.zip 
-} elseif ($version -in @("4.5", "4.6", "4.7", "4.8", "4.9", "4.10", "4.11")) {
-  Write-Host @("4.5", "4.6", "4.7", "4.8", "4.9", "4.10", "4.11")
+} elseif ($version -in @("4.5", "4.6", "4.7", "4.8", "4.9")) {
+  Write-Host @("4.5", "4.6", "4.7", "4.8", "4.9")
   .\do.bat components add_package $rx_instaler_dir_path\Platform.zip
   .\do.bat components add_package $rx_instaler_dir_path\DevelopmentStudio.zip 
   .\do.bat components add_package $rx_instaler_dir_path\DirectumRX.zip 
   .\do.bat components add_package $rx_instaler_dir_path\DeploymentTool.zip 
-} else {
+} 
+elseif ($version -in @("4.10", "4.11"))
+{
+  Write-Host @("4.10", "4.11")
+  .\do.bat components add_package $rx_instaler_dir_path\Platform.zip
+  .\do.bat components add_package $rx_instaler_dir_path\DevelopmentStudio.zip 
+  .\do.bat components add_package $rx_instaler_dir_path\DirectumRX.zip
+}
+else {
   Write-Host "Версия $version не поддерживается" -ForegroundColor Red
   break
 }
