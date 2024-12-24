@@ -145,7 +145,7 @@ if ($version -eq "4.2") {
   .\do.bat components add_package $rx_instaler_dir_path\DirectumRX.zip 
   .\do.bat components add_package $rx_instaler_dir_path\DeploymentTool.zip 
 } 
-elseif ($version -in @("4.10", "4.11"))
+elseif ($version -in @("4.10", "4.11", "4.12"))
 {
   Write-Host @("4.10", "4.11")
   .\do.bat components add_package $rx_instaler_dir_path\Platform.zip
