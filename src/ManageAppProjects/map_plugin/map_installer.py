@@ -1245,8 +1245,12 @@ distributions:
 
         exec(script, globals(), args_dict)
 
-    def run_metadata_browser(self) -> None:
-        """Запустить утидиту просмотра дерева метаданных."""
+    def run_metadata_browser(self, metadata_browser_path: str = '') -> None:
+        """Запустить утилиту просмотра дерева метаданных.
+
+        Args:
+            metadata_browser_path: путь утилите просмотра дерева метаданных.
+        """
         if not 'sungero_deploy.services_config' in sys.modules:
             log.error('Не найден модуль services_config')
             raise RuntimeError('Не найден модуль services_config')
@@ -1260,10 +1264,13 @@ distributions:
         for folder in config.services_config["DevelopmentStudio"]["REPOSITORIES"]["repository"]:
             development_folders.append(os.path.join(git_root_directory, folder["@folderName"]))
 
+        if metadata_browser_path:
+            source_executable = metadata_browser_path
+        else:
+            source_executable = '\\\\orpihost\\MetadataBrowser\\MetadataBrowser.exe'
 
         import tempfile
         with tempfile.TemporaryDirectory() as temp_directory_name:
-            source_executable = '\\\\orpihost\\MetadataBrowser\\MetadataBrowser.exe'
             dest_executable = os.path.join(temp_directory_name, 'MetadataBrowser.exe')
             shutil.copyfile(source_executable, dest_executable)
             json_config = { 'developmentFolders': development_folders }
