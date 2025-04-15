@@ -106,7 +106,8 @@ $version_file_path = Join-Path $rx_instaler_dir_path "version.json"
 $is_exists_version_file = Test-Path $version_file_path -PathType Leaf
 if ($is_exists_version_file) {
   $version_file = Get-Content $version_file_path | Out-String | ConvertFrom-Json
-  $version = $version_file.DirectumRX.Split('.')[0]+"."+$version_file.DirectumRX.Split('.')[1]
+  #$version = $version_file.DirectumRX.Split('.')[0]+"."+$version_file.DirectumRX.Split('.')[1]
+  $version = $version_file.Platform.Split('.')[0]+"."+$version_file.Platform.Split('.')[1]
 }
 else {
   $manifest = Get-Content $dst_path\manifest.json | Out-String | ConvertFrom-Json
@@ -151,6 +152,13 @@ elseif ($version -in @("4.10", "4.11", "4.12", "4.13"))
   .\do.bat components add_package $rx_instaler_dir_path\Platform.zip
   .\do.bat components add_package $rx_instaler_dir_path\DevelopmentStudio.zip 
   .\do.bat components add_package $rx_instaler_dir_path\DirectumRX.zip
+}
+elseif ($version -in @("25.1"))
+{
+  Write-Host @("25.1")
+  .\do.bat components add_package $rx_instaler_dir_path\Platform.zip
+  .\do.bat components add_package $rx_instaler_dir_path\DevelopmentStudio.zip 
+  .\do.bat components add_package $rx_instaler_dir_path\Base.zip
 }
 else {
   Write-Host "Версия $version не поддерживается" -ForegroundColor Red
