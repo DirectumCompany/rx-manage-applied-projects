@@ -153,9 +153,9 @@ elseif ($version -in @("4.10", "4.11", "4.12", "4.13"))
   .\do.bat components add_package $rx_instaler_dir_path\DevelopmentStudio.zip 
   .\do.bat components add_package $rx_instaler_dir_path\DirectumRX.zip
 }
-elseif ($version -in @("25.1"))
+elseif ($version -in @("25.1", "25.2"))
 {
-  Write-Host @("25.1")
+  Write-Host @("25.1", "25.2")
   .\do.bat components add_package $rx_instaler_dir_path\Platform.zip
   .\do.bat components add_package $rx_instaler_dir_path\DevelopmentStudio.zip 
   .\do.bat components add_package $rx_instaler_dir_path\Base.zip
