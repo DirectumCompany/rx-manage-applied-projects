@@ -910,7 +910,10 @@ services_config:
 
     #region manage distribution
     def build_distributions(self, distributions_config_path: str, destination_folder: str,
-                            repo_folder: str, increment_version: bool = True, need_pause: bool = False) -> int:
+                            repo_folder: str, increment_version: bool = True,
+                            need_pause: bool = False,
+                            use_dtcore: bool = False,
+                            project_config: str = None) -> int:
         """ Построить дистрибутивы проекта
 
         Args:
@@ -927,7 +930,7 @@ services_config:
             if not Path(destination_folder).is_dir():
                 raise FileNotFoundError(f'Не найдет каталог назначения {destination_folder}')
             if not Path(PurePath(repo_folder)).is_dir():
-                raise FileNotFoundError(f'Не найдет каталог назначения {repo_folder}')
+                raise FileNotFoundError(f'Не найдет каталог репозитория {repo_folder}')
 
             # загрузить конфиг с описанием дистрибутивов
             distr_config = yaml_tools.load_yaml_from_file(distributions_config_path)
@@ -960,7 +963,13 @@ services_config:
                     devpack_config = _get_full_path(repo_folder, devpack["config"])
                     if Path(devpack_config).is_file():
                         result_devpack = str(PurePath(distr_folder, devpack["result"]))
-                        self.export_devpack(devpack_config, result_devpack, increment_version=False)
+                        if use_dtcore:
+                            if project_config is not None:
+                                self.export_devpack_dtcore(project_config, devpack_config, result_devpack, increment_version=False)
+                            else:
+                                self.export_devpack_dtcore(self.config_path, devpack_config, result_devpack, increment_version=False)
+                        else:
+                            self.export_devpack(devpack_config, result_devpack, increment_version=False)
                     else:
                         log.warning(f'Не найден XML-конфиг {devpack_config}')
                 # скопировать уникальные для дистрибутива файлы и каталоги
@@ -1001,20 +1010,24 @@ services_config:
 
             # увеличить номер версии, сформировав и удалив указанные пакеты разработки
             if increment_version:
-                if distr_config["devpacks_for_increment_version"] is not None:
-                    log.info(_colorize_green('Увеличить номер версии решения'))
-                    for devpack in distr_config["devpacks_for_increment_version"]:
-                        devpack_config = _get_full_path(repo_folder, devpack["config"])
-                        if Path(devpack_config).is_file():
-                            result_devpack = str(PurePath(version_folder, "__temp_devpack_for_inc_ver.dat"))
-                            result_devpack_xml = str(PurePath(version_folder, "__temp_devpack_for_inc_ver.xml"))
-                            self.export_devpack(devpack_config, result_devpack, increment_version=True)
-                            os.remove(result_devpack)
-                            os.remove(result_devpack_xml)
-                        else:
-                            log.warning(f'Не найден XML-конфиг {devpack_config}')
+                if use_dtcore:
+                    self.export_devpack_dtcore(project_config, devpack_config, result_devpack, increment_version=True)
                 else:
-                    log.warning(f'Не найден параметр devpacks_for_increment_version - увеличение версии решения не будет выполнено')
+                    # увеличить номер версии в XML-конфиге дистрибутива
+                    if distr_config["devpacks_for_increment_version"] is not None:
+                        log.info(_colorize_green('Увеличить номер версии решения'))
+                        for devpack in distr_config["devpacks_for_increment_version"]:
+                            devpack_config = _get_full_path(repo_folder, devpack["config"])
+                            if Path(devpack_config).is_file():
+                                result_devpack = str(PurePath(version_folder, "__temp_devpack_for_inc_ver.dat"))
+                                result_devpack_xml = str(PurePath(version_folder, "__temp_devpack_for_inc_ver.xml"))
+                                self.export_devpack(devpack_config, result_devpack, increment_version=True)
+                                os.remove(result_devpack)
+                                os.remove(result_devpack_xml)
+                            else:
+                                log.warning(f'Не найден XML-конфиг {devpack_config}')
+                    else:
+                        log.warning(f'Не найден параметр devpacks_for_increment_version - увеличение версии решения не будет выполнено')
 
             if need_pause or need_pause is None:
                 pause()
@@ -1024,6 +1037,190 @@ services_config:
             if need_pause or need_pause is None:
                 pause()
             return 1
+
+
+    def dtcore_build_distributions(self,
+                                   distributions_config_path: str,
+                                   destination_folder: str,
+                                   project_config: str = None,
+                                   need_pause: bool = False) -> int:
+        """ Построить дистрибутивы проекта
+
+        Args:
+            distributions_config_path: путь к yml-файл, в котором описаны дистрибутивы, которые нужно собрать
+            destination_folder: папка, в которой будет создага папка с номером версии, внутри которой будут подготовлены дистрибутивы
+            project_config: конфиг с описанием проекта, чьи исходники нужно использовать. Если пусто - берется config.yml
+            need_pause: признак необходимости в конце сделать паузу и ожидать нажатия клавиши пользователем. По умолчанию - False
+        """
+        try:
+            # Проверить переданные параметры
+            if not Path(distributions_config_path).is_file():
+                raise FileNotFoundError(f'Не найдет конфиг описания дистрибутивов проекта {distributions_config_path}')
+            if not Path(destination_folder).is_dir():
+                raise FileNotFoundError(f'Не найдет каталог назначения {destination_folder}')
+            if project_config is not None and not Path(PurePath(project_config)).is_file():
+                raise FileNotFoundError(f'Не найдет файл проекта {project_config}')
+
+            repo_info = self._exctract_repos_info(project_config if project_config is not None else self.config_path)
+
+            # за основу взять первый репозиторий с рабочего слоя
+            repo_folder = PurePath(repo_info['root'], repo_info['work'][0])
+
+            # загрузить конфиг с описанием дистрибутивов
+            distr_config = yaml_tools.load_yaml_from_file(distributions_config_path)
+
+            # достать номер номер версии и инициализиовать папку версии в папке назначения
+            mtd_for_version = PurePath(repo_folder, distr_config["mtd_for_version"])
+            if not Path(mtd_for_version).is_file():
+                raise FileNotFoundError(f'Не найдет mtd-файл для получения версии решения {mtd_for_version}')
+            mtd = yaml_tools.load_yaml_from_file(mtd_for_version)
+            version = mtd["Version"]
+            log.info(_colorize_green(f'Номер версии {version}'))
+            version_folder = PurePath(destination_folder, version)
+            io_tools._create_or_clean_dir(version_folder)
+
+            # readme_string - массив строк для readme.md, в котором будет перечень дистрибутивов
+            readme_strings = []
+            readme_strings.append(distr_config["project"])
+            readme_strings.append(f'Версия: {version}')
+            readme_strings.append(f'Варианты дистрибутивов: ')
+            for distr in distr_config["distributions"]:
+                log.info(_colorize_green(f'Обработка дистрибутива {distr["id"]}'))
+                readme_strings.append(f'* {distr["folder_name"]} - {distr["comment"]}')
+                readme_strings.append("")
+
+                # проинициализировать папку дистрибутива
+                distr_folder =  PurePath(version_folder, distr["folder_name"])
+                io_tools._create_or_clean_dir(distr_folder)
+                # выгрузить пакеты разработки, при этом номер версии не увеличивать
+                for devpack in distr["devpacks"]:
+                    devpack_config = _get_full_path(repo_folder, devpack["config"])
+                    if Path(devpack_config).is_file():
+                        result_devpack = str(PurePath(distr_folder, devpack["result"]))
+                        self.dtcore_export_devpack(devpack_config, result_devpack, project_config)
+                    else:
+                        log.warning(f'Не найден XML-конфиг {devpack_config}')
+                # скопировать уникальные для дистрибутива файлы и каталоги
+                if distr["files"] is not None:
+                    for f in distr["files"]:
+                        if f["src"] != "":
+                            src = _get_full_path(repo_folder, f["src"])
+                            dst = PurePath(distr_folder, f["dst"])
+                            log.info(_colorize_green(f'  Копирование {src} -> {dst}'))
+                            if Path(src).is_file():
+                                shutil.copy(str(src), str(dst))
+                            elif Path(src).is_dir():
+                                shutil.copytree(str(src), str(dst))
+                            else:
+                                log.warning(f'Не найдет источник "{src}", указанный для дистрибутива {distr["id"]}')
+                # скопировать каталоги и файлы, которые дублируются для каждого дистрибутива
+                if distr_config["to_every_set"] is not None:
+                    for f in distr_config["to_every_set"]:
+                        if f["src"] != "":
+                            src = _get_full_path(repo_folder, f["src"])
+                            dst = PurePath(distr_folder, f["dst"])
+                            log.info(_colorize_green(f'  Копирование {src} -> {dst}'))
+                            if Path(src).is_file():
+                                shutil.copy(str(src), str(dst))
+                            elif Path(src).is_dir():
+                                shutil.copytree(str(src), str(dst))
+                            else:
+                                log.warning(f'Не найдет источник "{src}", указанный для всех дистрибутивов')
+                # создать архивы дистрибутивов
+                if distr["zip_name"] != "":
+                    zip_name = str(PurePath(version_folder, f'{distr["zip_name"]} v.{version}.zip'))
+                    log.info(_colorize_green(f'Создать архив {zip_name}'))
+                    io_tools.create_archive(zip_name, distr_folder)
+
+            # сформировать readme.md для версии
+            with open(str(PurePath(version_folder, 'readme.md')), "w", encoding='UTF-8') as f:
+                f.write("\n".join(readme_strings))
+
+            if need_pause or need_pause is None:
+                pause()
+            return 0
+        except Exception as error:
+            log.error(f'При формировании дистирибутивов возникла ошибка {error.value}')
+            if need_pause or need_pause is None:
+                pause()
+            return 1
+
+
+    def _exctract_repos_info(self, project_config: str) -> dict:
+        project_config = yaml_tools.load_yaml_from_file(project_config)
+
+        result = {'root': '', 'work': [], 'base': []}
+        # Извлечь home_path_src корневой каталог с исходниками
+        variables = project_config.get("variables", None)
+        if variables is None:
+            raise Exception("В конфиге проекта (project_config) не задан параметр variables")
+        result['root'] = variables.get("home_path_src", None)
+        if result['root'] is None:
+            raise Exception("В конфиге проекта (project_config) не задан параметр variables->home_path_src")
+        if result['root'].endswith('\\'):
+            result['root'] = result['root'][:-1]
+
+        # Извлечь в all_repos список репозиториев
+        services_config = project_config.get("services_config", None)
+        if services_config is None:
+            raise Exception("В конфиге проекта (project_config) не задан параметр services_config")
+        services_config = services_config.get("DevelopmentStudio", None)
+        if services_config is None:
+            raise Exception("В конфиге проекта (project_config) не задан параметр services_config->DevelopmentStudio")
+        repositories_config = services_config.get("REPOSITORIES", None)
+        if repositories_config is None:
+            raise Exception("В конфиге проекта (project_config) не задан параметр services_config->DevelopmentStudio->REPOSITORIES")
+        repository = repositories_config.get("repository", None)
+        if repository is None:
+            raise Exception("В конфиге проекта (project_config) не задан параметр services_config->DevelopmentStudio->REPOSITORIES->repository")
+        for r in repository:
+            if r.get("@solutionType", "").lower() == "work":
+                result['work'].append(r["@folderName"])
+            if r.get("@solutionType", "").lower() == "base":
+                result['base'].append(r["@folderName"])
+        return result
+
+    def dtcore_increment_version(self,
+                                    project_config: str = None,
+                                    need_pause: bool = False) -> None:
+        repo_info = self._exctract_repos_info(project_config if project_config is not None else self.config_path)
+
+        import sys
+        if 'platform_plugin.deployment_tool' in sys.modules:
+            from platform_plugin.deployment_tool import DeploymentTool
+
+        dt = DeploymentTool(get_config_model(self.config_path))
+        dt.increment_version(root=repo_info['root'],
+                             repositories=";".join(repo_info['work']))
+
+        if need_pause or need_pause is None:
+            pause()
+
+
+    def dtcore_export_devpack(self,
+                              devpack_config_name: str,
+                              devpack_file_name: str,
+                              project_config: str = None,
+                              need_pause: bool = False) -> None:
+
+        repo_info = self._exctract_repos_info(project_config if project_config is not None else self.config_path)
+        all_repos = [r for r in repo_info['work']]
+        all_repos.extend([r for r in repo_info['base']])
+        print(all_repos)
+
+        import sys
+        if 'platform_plugin.deployment_tool' in sys.modules:
+            from platform_plugin.deployment_tool import DeploymentTool
+
+        dt = DeploymentTool(get_config_model(self.config_path))
+        dt.export_package(export_package=devpack_file_name,
+                          root=repo_info['root'],
+                          configuration=devpack_config_name,
+                          repositories=";".join(all_repos))
+
+        if need_pause or need_pause is None:
+            pause()
+
 
     def export_devpack(self, devpack_config_name: str, devpack_file_name: str,
                        increment_version: bool = None, set_version: str = None,
@@ -1037,6 +1234,7 @@ services_config:
             set_version: номер версии, который надо установить. Задает параметр --set-version. . Если указано значение None - то не передается при вызове DDS
             need_pause: признак необходимости в конце сделать паузу и ожидать нажатия клавиши пользователем. По умолчанию - False
         """
+
         inc_ver_param = ""
         if increment_version is not None:
             inc_ver_param = f'--increment-version {increment_version}'
