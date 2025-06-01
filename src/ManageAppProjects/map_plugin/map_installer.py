@@ -912,7 +912,6 @@ services_config:
     def build_distributions(self, distributions_config_path: str, destination_folder: str,
                             repo_folder: str, increment_version: bool = True,
                             need_pause: bool = False,
-                            use_dtcore: bool = False,
                             project_config: str = None) -> int:
         """ Построить дистрибутивы проекта
 
@@ -963,13 +962,7 @@ services_config:
                     devpack_config = _get_full_path(repo_folder, devpack["config"])
                     if Path(devpack_config).is_file():
                         result_devpack = str(PurePath(distr_folder, devpack["result"]))
-                        if use_dtcore:
-                            if project_config is not None:
-                                self.export_devpack_dtcore(project_config, devpack_config, result_devpack, increment_version=False)
-                            else:
-                                self.export_devpack_dtcore(self.config_path, devpack_config, result_devpack, increment_version=False)
-                        else:
-                            self.export_devpack(devpack_config, result_devpack, increment_version=False)
+                        self.export_devpack(devpack_config, result_devpack, increment_version=False)
                     else:
                         log.warning(f'Не найден XML-конфиг {devpack_config}')
                 # скопировать уникальные для дистрибутива файлы и каталоги
@@ -1010,24 +1003,21 @@ services_config:
 
             # увеличить номер версии, сформировав и удалив указанные пакеты разработки
             if increment_version:
-                if use_dtcore:
-                    self.export_devpack_dtcore(project_config, devpack_config, result_devpack, increment_version=True)
+                # увеличить номер версии в XML-конфиге дистрибутива
+                if distr_config["devpacks_for_increment_version"] is not None:
+                    log.info(_colorize_green('Увеличить номер версии решения'))
+                    for devpack in distr_config["devpacks_for_increment_version"]:
+                        devpack_config = _get_full_path(repo_folder, devpack["config"])
+                        if Path(devpack_config).is_file():
+                            result_devpack = str(PurePath(version_folder, "__temp_devpack_for_inc_ver.dat"))
+                            result_devpack_xml = str(PurePath(version_folder, "__temp_devpack_for_inc_ver.xml"))
+                            self.export_devpack(devpack_config, result_devpack, increment_version=True)
+                            os.remove(result_devpack)
+                            os.remove(result_devpack_xml)
+                        else:
+                            log.warning(f'Не найден XML-конфиг {devpack_config}')
                 else:
-                    # увеличить номер версии в XML-конфиге дистрибутива
-                    if distr_config["devpacks_for_increment_version"] is not None:
-                        log.info(_colorize_green('Увеличить номер версии решения'))
-                        for devpack in distr_config["devpacks_for_increment_version"]:
-                            devpack_config = _get_full_path(repo_folder, devpack["config"])
-                            if Path(devpack_config).is_file():
-                                result_devpack = str(PurePath(version_folder, "__temp_devpack_for_inc_ver.dat"))
-                                result_devpack_xml = str(PurePath(version_folder, "__temp_devpack_for_inc_ver.xml"))
-                                self.export_devpack(devpack_config, result_devpack, increment_version=True)
-                                os.remove(result_devpack)
-                                os.remove(result_devpack_xml)
-                            else:
-                                log.warning(f'Не найден XML-конфиг {devpack_config}')
-                    else:
-                        log.warning(f'Не найден параметр devpacks_for_increment_version - увеличение версии решения не будет выполнено')
+                   log.warning(f'Не найден параметр devpacks_for_increment_version - увеличение версии решения не будет выполнено')
 
             if need_pause or need_pause is None:
                 pause()
@@ -1038,6 +1028,41 @@ services_config:
                 pause()
             return 1
 
+    def export_devpack(self, devpack_config_name: str, devpack_file_name: str,
+                       increment_version: bool = None, set_version: str = None,
+                       need_pause: bool = False) -> None:
+        """Экспортировать пакет разработки
+
+        Args:
+            devpack_config_name: имя XML-файла с конфигурацией пакета разработки. Задает параметр --configuration
+            devpack_file_name: путь к создаваемому файлу с пакетом разработки. Задает параметр --development-package
+            increment_version: признак, который определяет нужно увеличивать номер версии модулей и решений или нет.
+            set_version: номер версии, который надо установить. Задает параметр --set-version. . Если указано значение None - то не передается при вызове DDS
+            need_pause: признак необходимости в конце сделать паузу и ожидать нажатия клавиши пользователем. По умолчанию - False
+        """
+
+        inc_ver_param = ""
+        if increment_version is not None:
+            inc_ver_param = f'--increment-version {increment_version}'
+        set_ver_param = ""
+        if set_version is not None:
+            set_ver_param = f'--set-version {set_version}'
+
+        """Подгрузить модуль DDS.
+        Выполняется именно тут, т.к:
+        * если делать при загрузке - то модули-зависимости могут не успеть подгрузиться
+        * DDS может не быть не установлены и надо об этом сообщать
+        """
+        import sys
+        if 'dds_plugin.development_studio' in sys.modules:
+            from dds_plugin.development_studio import DevelopmentStudio
+        else:
+            log.error('Не найден модуль dds_plugin.development_studio')
+            raise RuntimeError('Не найден модуль dds_plugin.development_studio')
+        command = f' --configuration {devpack_config_name} --development-package {devpack_file_name} {inc_ver_param} {set_ver_param}'
+        DevelopmentStudio(self.config_path).run(command=command)
+        if need_pause or need_pause is None:
+            pause()
 
     def dtcore_build_distributions(self,
                                    distributions_config_path: str,
@@ -1097,7 +1122,7 @@ services_config:
                     devpack_config = _get_full_path(repo_folder, devpack["config"])
                     if Path(devpack_config).is_file():
                         result_devpack = str(PurePath(distr_folder, devpack["result"]))
-                        self.dtcore_export_devpack(devpack_config, result_devpack, project_config)
+                        self.export_devpack_dtcore(devpack_config, result_devpack, project_config)
                     else:
                         log.warning(f'Не найден XML-конфиг {devpack_config}')
                 # скопировать уникальные для дистрибутива файлы и каталоги
@@ -1145,6 +1170,46 @@ services_config:
                 pause()
             return 1
 
+    def export_devpack_dtcore(self,
+                              devpack_config_name: str,
+                              devpack_file_name: str,
+                              project_config: str = None,
+                              need_pause: bool = False) -> None:
+
+        repo_info = self._exctract_repos_info(project_config if project_config is not None else self.config_path)
+        all_repos = [r for r in repo_info['work']]
+        all_repos.extend([r for r in repo_info['base']])
+        print(all_repos)
+
+        import sys
+        if 'platform_plugin.deployment_tool' in sys.modules:
+            from platform_plugin.deployment_tool import DeploymentTool
+
+        dt = DeploymentTool(get_config_model(self.config_path))
+        dt.export_package(export_package=devpack_file_name,
+                          root=repo_info['root'],
+                          configuration=devpack_config_name,
+                          repositories=";".join(all_repos))
+
+        if need_pause or need_pause is None:
+            pause()
+
+    def dtcore_increment_version(self,
+                                    project_config: str = None,
+                                    need_pause: bool = False) -> None:
+        repo_info = self._exctract_repos_info(project_config if project_config is not None else self.config_path)
+
+        import sys
+        if 'platform_plugin.deployment_tool' in sys.modules:
+            from platform_plugin.deployment_tool import DeploymentTool
+
+        dt = DeploymentTool(get_config_model(self.config_path))
+        dt.increment_version(root=repo_info['root'],
+                             repositories=";".join(repo_info['work']))
+
+        if need_pause or need_pause is None:
+            pause()
+
 
     def _exctract_repos_info(self, project_config: str) -> dict:
         project_config = yaml_tools.load_yaml_from_file(project_config)
@@ -1179,84 +1244,6 @@ services_config:
             if r.get("@solutionType", "").lower() == "base":
                 result['base'].append(r["@folderName"])
         return result
-
-    def dtcore_increment_version(self,
-                                    project_config: str = None,
-                                    need_pause: bool = False) -> None:
-        repo_info = self._exctract_repos_info(project_config if project_config is not None else self.config_path)
-
-        import sys
-        if 'platform_plugin.deployment_tool' in sys.modules:
-            from platform_plugin.deployment_tool import DeploymentTool
-
-        dt = DeploymentTool(get_config_model(self.config_path))
-        dt.increment_version(root=repo_info['root'],
-                             repositories=";".join(repo_info['work']))
-
-        if need_pause or need_pause is None:
-            pause()
-
-
-    def dtcore_export_devpack(self,
-                              devpack_config_name: str,
-                              devpack_file_name: str,
-                              project_config: str = None,
-                              need_pause: bool = False) -> None:
-
-        repo_info = self._exctract_repos_info(project_config if project_config is not None else self.config_path)
-        all_repos = [r for r in repo_info['work']]
-        all_repos.extend([r for r in repo_info['base']])
-        print(all_repos)
-
-        import sys
-        if 'platform_plugin.deployment_tool' in sys.modules:
-            from platform_plugin.deployment_tool import DeploymentTool
-
-        dt = DeploymentTool(get_config_model(self.config_path))
-        dt.export_package(export_package=devpack_file_name,
-                          root=repo_info['root'],
-                          configuration=devpack_config_name,
-                          repositories=";".join(all_repos))
-
-        if need_pause or need_pause is None:
-            pause()
-
-
-    def export_devpack(self, devpack_config_name: str, devpack_file_name: str,
-                       increment_version: bool = None, set_version: str = None,
-                       need_pause: bool = False) -> None:
-        """Экспортировать пакет разработки
-
-        Args:
-            devpack_config_name: имя XML-файла с конфигурацией пакета разработки. Задает параметр --configuration
-            devpack_file_name: путь к создаваемому файлу с пакетом разработки. Задает параметр --development-package
-            increment_version: признак, который определяет нужно увеличивать номер версии модулей и решений или нет.
-            set_version: номер версии, который надо установить. Задает параметр --set-version. . Если указано значение None - то не передается при вызове DDS
-            need_pause: признак необходимости в конце сделать паузу и ожидать нажатия клавиши пользователем. По умолчанию - False
-        """
-
-        inc_ver_param = ""
-        if increment_version is not None:
-            inc_ver_param = f'--increment-version {increment_version}'
-        set_ver_param = ""
-        if set_version is not None:
-            set_ver_param = f'--set-version {set_version}'
-
-        """Подгрузить модуль DDS.
-        Выполняется именно тут, т.к:
-        * если делать при загрузке - то модули-зависимости могут не успеть подгрузиться
-        * DDS может не быть не установлены и надо об этом сообщать
-        """
-        import sys
-        if 'dds_plugin.development_studio' in sys.modules:
-            from dds_plugin.development_studio import DevelopmentStudio
-        else:
-            log.error('Не найден модуль dds_plugin.development_studio')
-            raise RuntimeError('Не найден модуль dds_plugin.development_studio')
-        command = f' --configuration {devpack_config_name} --development-package {devpack_file_name} {inc_ver_param} {set_ver_param}'
-        DevelopmentStudio(self.config_path).run(command=command)
-        if need_pause or need_pause is None:
-            pause()
 
     def generate_empty_distributions_config(self, new_config_path: str) -> None:
         """ Создать новый файл с описанием дистрибутивов проекта
