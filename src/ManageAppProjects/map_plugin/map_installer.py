@@ -1430,6 +1430,40 @@ distributions:
 
         exec(script, globals(), args_dict)
 
+    def run_metadata_browser(self, metadata_browser_path: str = '') -> None:
+        """Запустить утилиту просмотра дерева метаданных.
+
+        Args:
+            metadata_browser_path: путь утилите просмотра дерева метаданных.
+        """
+        if not 'sungero_deploy.services_config' in sys.modules:
+            log.error('Не найден модуль services_config')
+            raise RuntimeError('Не найден модуль services_config')
+
+        config = get_config_model(self.config_path)
+
+        from sungero_deploy.services_config import try_get_first_var_value
+        git_root_directory = try_get_first_var_value("GIT_ROOT_DIRECTORY", config)
+
+        development_folders = []
+        for folder in config.services_config["DevelopmentStudio"]["REPOSITORIES"]["repository"]:
+            development_folders.append(os.path.join(git_root_directory, folder["@folderName"]))
+
+        if metadata_browser_path:
+            source_executable = metadata_browser_path
+        else:
+            source_executable = '\\\\orpihost\\MetadataBrowser\\MetadataBrowser.exe'
+
+        import tempfile
+        with tempfile.TemporaryDirectory() as temp_directory_name:
+            dest_executable = os.path.join(temp_directory_name, 'MetadataBrowser.exe')
+            shutil.copyfile(source_executable, dest_executable)
+            json_config = { 'developmentFolders': development_folders }
+            config_file_name = os.path.join(temp_directory_name, 'appsettings.json')
+            with open(config_file_name, 'w') as config_file:
+                json.dump(json_config, config_file)
+            process.try_execute(dest_executable)
+
     @staticmethod
     def help() -> None:
         log.info('do map set - переключиться на проект, описаный в указанном yml-файла')
