@@ -351,6 +351,7 @@ def _show_config(config_path):
     """Показать ключевые параметры указанного конфига"""
     config = yaml_tools.load_yaml_from_file(_get_check_file_path(config_path))
     vars = config.get("variables")
+
     repos = config.get("services_config").get("DevelopmentStudio").get('REPOSITORIES').get("repository")
     maxlen = 0
     for repo in repos:
@@ -380,6 +381,21 @@ def _show_config(config_path):
 
     for repo_str in repos_str:
         log.info(f'  {repo_str["folder"].ljust(maxlen_folder)} {repo_str["status"].ljust(maxlen_status)} {repo_str["solutiontype"]} {repo_str["url"]}')
+
+    # формирование конфига для CrossPlatform Development Studio
+    s = '{'+f'"name": "configuration#{vars.get("database")}", '+f'"title": "{vars.get("instance_name")}.{vars.get("database")}", '
+    root_dir = vars.get("home_path_src").replace('\\', '\\\\')
+    s += f'"rootDirectory": "{root_dir}", '+' \n"repositories": ['
+    for repo in repos:
+        s += '{'
+        s += f'"folderName": "{repo.get("@folderName")}", "type": "{repo.get("@solutionType")}"'
+        if repo == repos[-1]:
+            s += '}'
+        else:
+            s += '},\n'
+    s += ']}'
+    log.info('')
+    log.info(s)
 
 def _show_CommentedMap(template_config: CommentedMap, dst_config: CommentedMap, indent: int = 1, original_template_config: CommentedMap = None):
     indent_template = "  "
