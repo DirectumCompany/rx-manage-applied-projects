@@ -31,6 +31,8 @@ from common_plugin import git_tools
 
 
 MANAGE_APPLIED_PROJECTS_ALIAS = 'map'
+# узел в конфиге с настройками плагина
+MAP_CONGIG_KEY = 'manage_applied_projects'
 
 #region service function
 
@@ -259,18 +261,18 @@ def _get_map_settings(config_path: str = None, config: Any = None, param_name: s
             config = yaml_tools.load_yaml_from_file(_get_check_file_path(config_path)) #get_config_model(config_path)
         else:
             raise AssertionError('Должен быть либо указан параметр config, либо config_path')
-    if "manage_applied_projects" in config:
-        manage_applied_projects_config = config.get("manage_applied_projects", None)
+    if MAP_CONGIG_KEY in config:
+        manage_applied_projects_config = config.get(MAP_CONGIG_KEY, None)
         if param_name in manage_applied_projects_config:
             return manage_applied_projects_config.get(param_name)
         else:
             if is_required:
-                raise AssertionError(f'В config.yml отсутствует параметр manage_applied_projects -> {param_name}')
+                raise AssertionError(f'В config.yml отсутствует параметр {MAP_CONGIG_KEY} -> {param_name}')
             else:
                 return default_value
     else:
         if is_required:
-            raise AssertionError('В config.yml отсутствует раздел "manage_applied_projects"')
+            raise AssertionError(f'В config.yml отсутствует раздел {"MAP_CONGIG_KEY"}')
         else:
             return default_value
 
@@ -296,6 +298,8 @@ def _run_dds(config_path: str, need_run: bool, confirm: bool) -> None:
 
 def repo_info(root_src, folder):
     path = str(PurePath(root_src, folder))
+    remote_url = ""
+    repo_status = f'{_colorize("no data", color="yellow", attrs=["bold"])}'
 
     if pathlib.Path(path).exists():
         stdout_messages: List[str] = ['']
@@ -321,6 +325,16 @@ def repo_info(root_src, folder):
             else:
                 detail = branch
 
+            remote_url_out: List[str] = []
+            result = git_tools.git_run("remote get-url origin",
+                            cwd=path,
+                            filter=process.save_stdout_message_handler(remote_url_out),
+                            log_stdout=False)
+
+            if not remote_url_out[0].startswith("error") and \
+               not remote_url_out[0].startswith("fatal"):
+                remote_url = remote_url_out[0]
+
             stdout_messages_f: List[str] = []
             result = git_tools.git_run("status -s",
                             cwd=path,
@@ -337,8 +351,8 @@ def repo_info(root_src, folder):
                         changes = f'{k}:{v}'
                     else:
                         changes = f'{changes}, {k}:{v}'
-                return f'({_colorize_green(detail)}) {changes}'
-    return f'{_colorize("no data", color="yellow", attrs=["bold"])}'
+                repo_status = f'({_colorize_green(detail)}) {changes}'
+    return remote_url, repo_status
 
 def _show_config2(template_config_path: str, current_config_path: str, message: str) -> None:
     """Показать отличия двух конфигов"""
@@ -352,50 +366,72 @@ def _show_config(config_path):
     config = yaml_tools.load_yaml_from_file(_get_check_file_path(config_path))
     vars = config.get("variables")
 
-    repos = config.get("services_config").get("DevelopmentStudio").get('REPOSITORIES').get("repository")
-    maxlen = 0
-    for repo in repos:
-        if maxlen < len(repo.get("@folderName")):
-            maxlen = len(repo.get("@folderName"))
     log.info(Bold(f'Назначение:          {vars.get("purpose")}'))
     if vars.get("project_config_path") is not None:
         log.info(f'project_config_path: {_colorize_green(vars.get("project_config_path"))}')
     log.info(f'database:            {_colorize_green(vars.get("database"))}')
     log.info(f'home_path:           {_colorize_green(vars.get("home_path"))}')
-    log.info(f'home_path_src:       {_colorize_green(vars.get("home_path_src"))}')
-    log.info('repositories:')
-    repos_str = []
-    maxlen_folder = 0
-    maxlen_status = 0
-    for repo in repos:
-        folder_str = f'folder: {_colorize_green(repo.get("@folderName")):}'
-        solutiontype_str = f'solutiontype: {_colorize_green(repo.get("@solutionType"))}'
-        url_str = f'url: {_colorize_green(repo.get("@url"))}'
-        status_str = f'status: {repo_info(vars.get("home_path_src"), repo.get("@folderName"))}'
-        repos_str.append({"folder": folder_str,
-                          "solutiontype": solutiontype_str,
-                          "url": url_str,
-                          "status": status_str})
-        maxlen_folder = len(folder_str) if maxlen_folder < len(folder_str) else maxlen_folder
-        maxlen_status = len(status_str) if maxlen_status < len(status_str) else maxlen_status
 
-    for repo_str in repos_str:
-        log.info(f'  {repo_str["folder"].ljust(maxlen_folder)} {repo_str["status"].ljust(maxlen_status)} {repo_str["solutiontype"]} {repo_str["url"]}')
+    def _show_repos(repos):
+        maxlen = 0
+        for repo in repos:
+            if maxlen < len(repo.get("@folderName")):
+                maxlen = len(repo.get("@folderName"))
+        log.info(f'home_path_src:       {_colorize_green(vars.get("home_path_src"))}')
+        log.info('repositories:')
+        repos_str = []
+        maxlen_folder = 0
+        maxlen_status = 0
+        for repo in repos:
+            folder_str = f'folder: {_colorize_green(repo.get("@folderName")):}'
+            solutiontype_str = f'solutiontype: {_colorize_green(repo.get("@solutionType"))}'
+            repo_url, repo_status = repo_info(vars.get("home_path_src"), repo.get("@folderName"))
+            url_str = f'url: {_colorize_green(repo_url)}'
+            status_str = f'status: {repo_status}'
+            repos_str.append({"folder": folder_str,
+                            "solutiontype": solutiontype_str,
+                            "url": url_str,
+                            "status": status_str})
+            maxlen_folder = len(folder_str) if maxlen_folder < len(folder_str) else maxlen_folder
+            maxlen_status = len(status_str) if maxlen_status < len(status_str) else maxlen_status
+        for repo_str in repos_str:
+            log.info(f'  {repo_str["folder"].ljust(maxlen_folder)} {repo_str["status"].ljust(maxlen_status)} {repo_str["solutiontype"]} {repo_str["url"]}')
 
-    # формирование конфига для CrossPlatform Development Studio
-    s = '{'+f'"name": "configuration#{vars.get("database")}", '+f'"title": "{vars.get("instance_name")}.{vars.get("database")}", '
-    root_dir = vars.get("home_path_src").replace('\\', '\\\\')
-    s += f'"rootDirectory": "{root_dir}", '+' \n"repositories": ['
-    for repo in repos:
-        s += '{'
-        s += f'"folderName": "{repo.get("@folderName")}", "type": "{repo.get("@solutionType")}"'
-        if repo == repos[-1]:
-            s += '}'
-        else:
-            s += '},\n'
-    s += ']}'
-    log.info('')
-    log.info(s)
+    # Визуализация репозиториев для DDS
+    if "DevelopmentStudio" in config.get("services_config").keys() and \
+        MAP_CONGIG_KEY in config.keys() and \
+        config.get(MAP_CONGIG_KEY).get("show_dds_repos", True):
+        repos = config.get("services_config").get("DevelopmentStudio").get('REPOSITORIES').get("repository")
+        log.info('\nDDS:')
+        _show_repos(repos)
+
+    # Визуализация репозиториев для DS
+    if "DevelopmentStudioDesktop" in config.get("services_config").keys() and \
+        MAP_CONGIG_KEY in config.keys() and \
+        config.get(MAP_CONGIG_KEY).get("show_ds_repos", True):
+
+        repos = config.get("services_config").get("DevelopmentStudioDesktop").get('REPOSITORIES').get("repository")
+        log.info('\nDS:')
+        _show_repos(repos)
+
+        if config.get(MAP_CONGIG_KEY).get("need_show_ds_configs", False):
+            # показать json для конфигурации Development Studio Desktop
+            configuration_str = '{\n'
+            configuration_str += f'  "name": "configuration#{vars.get("database")}",\n'
+            configuration_str += f'  "title": "{vars.get("instance_name")}.{vars.get("database")}",\n'
+            configuration_str += f'  "rootDirectory": "{vars.get("home_path_src").replace('\\', '\\\\')}",\n'
+            configuration_str += '  "repositories": ['
+            for repo in repos:
+                configuration_str += '{\n'
+                configuration_str += f'    "folderName": "{repo.get("@folderName")}",\n'
+                configuration_str += f'    "type": "{repo.get("@solutionType")}"'
+                if repo == repos[-1]:
+                    configuration_str += '\n    }'
+                else:
+                    configuration_str += '\n    },'
+            configuration_str += '\n  ]\n}'
+            log.info('\nКонфигурация для DS:')
+            log.info(configuration_str)
 
 def _show_CommentedMap(template_config: CommentedMap, dst_config: CommentedMap, indent: int = 1, original_template_config: CommentedMap = None):
     indent_template = "  "
