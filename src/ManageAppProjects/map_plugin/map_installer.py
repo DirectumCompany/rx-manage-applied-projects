@@ -416,20 +416,21 @@ def _show_config(config_path):
 
         if config.get(MAP_CONGIG_KEY).get("need_show_ds_configs", False):
             # показать json для конфигурации Development Studio Desktop
-            configuration_str = '{\n'
-            configuration_str += f'  "name": "configuration#{vars.get("database")}",\n'
-            configuration_str += f'  "title": "{vars.get("instance_name")}.{vars.get("database")}",\n'
-            configuration_str += f'  "rootDirectory": "{vars.get("home_path_src").replace('\\', '\\\\')}",\n'
-            configuration_str += '  "repositories": ['
+            configuration_str = '    {\n'
+            configuration_str += f'      "name": "{vars.get("database")}",\n'
+            configuration_str += f'      "title": "{vars.get("instance_name")}.{vars.get("database")}",\n'
+            rootDir = vars.get("home_path_src").replace("\\", "\\\\")
+            configuration_str += f'      "rootDirectory": "{rootDir}",\n'
+            configuration_str += '      "repositories": ['
             for repo in repos:
-                configuration_str += '{\n'
-                configuration_str += f'    "folderName": "{repo.get("@folderName")}",\n'
-                configuration_str += f'    "type": "{repo.get("@solutionType")}"'
+                configuration_str += '    {\n'
+                configuration_str += f'         "folderName": "{repo.get("@folderName")}",\n'
+                configuration_str += f'         "type": "{repo.get("@solutionType")}"'
                 if repo == repos[-1]:
-                    configuration_str += '\n    }'
+                    configuration_str += '\n        }'
                 else:
-                    configuration_str += '\n    },'
-            configuration_str += '\n  ]\n}'
+                    configuration_str += '\n        },'
+            configuration_str += '\n      ]\n    }'
             log.info('\nКонфигурация для DS:')
             log.info(configuration_str)
 
@@ -458,8 +459,9 @@ def _show_CommentedMap(template_config: CommentedMap, dst_config: CommentedMap, 
                 for repo in v:
                     folder_str = f'folder: {_colorize_green(repo.get("@folderName")):}'
                     solutiontype_str = f'solutiontype: {_colorize_green(repo.get("@solutionType"))}'
-                    url_str = f'url: {_colorize_green(repo.get("@url"))}'
-                    status_str = f'status: {repo_info(vars.get("home_path_src"), repo.get("@folderName"))}'
+                    repo_url, repo_status = repo_info(vars.get("home_path_src"), repo.get("@folderName"))
+                    url_str = f'url: {_colorize_green(repo_url)}'
+                    status_str = f'status: {repo_status}'
                     repos_str.append({"folder": folder_str,
                                     "solutiontype": solutiontype_str,
                                     "url": url_str,
