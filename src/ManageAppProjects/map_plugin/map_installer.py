@@ -14,6 +14,7 @@ import json
 import re
 from ui_installer.lib.click import pause
 from ruamel.yaml import CommentedMap, CommentedSeq, scalarstring
+import copy
 
 
 from fire.formatting import Bold
@@ -25,7 +26,7 @@ from common_plugin import yaml_tools
 from sungero_deploy.all import All
 from sungero_deploy.scripts_config import get_config_model
 from sungero_deploy.tools.sungerodb import SungeroDB
-from py_common import io_tools, process
+from py_common import io_tools, process, common_paths
 from sungero_deploy.scripts_config import Config
 from common_plugin import git_tools
 
@@ -40,15 +41,30 @@ def _get_rx_version(need_short: bool = True) -> str:
     """Вернуть версию RX
     """
     # версия 4.2. Информация о билде прикладной хранится в version.txt
-    version_dict = yaml_tools.load_yaml_from_file(_get_check_file_path("etc\\_builds\\version.txt"))
+    version_dict = yaml_tools.load_yaml_from_file(_get_check_file_path(Path(common_paths.root_path,"etc\\_builds\\version.txt")))
     applied_builds_version = version_dict["builds"].get("applied_builds", None)
     if applied_builds_version is not None:
         return applied_builds_version["version"]
 
-    with open(_get_check_file_path("etc\\_builds\\DirectumRX\\manifest.json"),  'r', encoding='utf-8') as manifest_json:
+    rx_path = Path(common_paths.root_path, "etc\\_builds\\DirectumRX\\manifest.json")
+    base_path= Path(common_paths.root_path, "etc\\_builds\\base\\manifest.json")
+    manifest_path = rx_path if rx_path.is_file() else base_path
+    with open(_get_check_file_path(manifest_path),  'r', encoding='utf-8') as manifest_json:
         data = " ".join(manifest_json.readlines())
         manifest_dict = json.loads(data)
         return manifest_dict["version"]
+
+def _is_ds_mode_used() -> bool:
+    # начиная с 26.2 использовать новый режим переключения между проектами
+    # который предполагает обязательное использование DS
+    return _get_rx_version().startswith("26.2")
+
+def _is_dds_installed() -> bool:
+    return 'dds_plugin.development_studio' in sys.modules
+
+def _is_ds_installed() -> bool:
+    return 'ds_plugin.crossplatform_development_studio' in sys.modules
+
 
 def _copy_database_mssql(config: Config, src_db_name: str, dst_db_name: str) -> None:
     """Создать копию базы данных на Microsoft SQL Server.
@@ -361,6 +377,89 @@ def _show_config2(template_config_path: str, current_config_path: str, message: 
     log.info(message)
     _show_CommentedMap(template_config, current_config)
 
+def _show_CommentedMap_ds(current_configuration: CommentedMap, target_configuration: CommentedMap, home_path_src: str,
+                          indent: int = 1):
+
+    indent_template = "  "
+    mark = ""
+    for k,v in current_configuration.items():
+        if type(v) == CommentedMap:
+            # текущий элемент - узел, надо в него провалиться
+            dst_config_next_level = None
+            if target_configuration is not None and k in target_configuration.keys():
+                mark = ""
+                dst_config_next_level = target_configuration[k]
+            else:
+                mark = _colorize_green('[+]')
+            log.info(f"{(indent)*indent_template}{mark}{k}:")
+            _show_CommentedMap_ds(v, dst_config_next_level, home_path_src, (indent+1))
+        elif type(v) == CommentedSeq:
+            if k.lower() == "setting":
+                for r in v:
+                    log.info(f"{(indent)*indent_template}{r.get('@name','')} = {r.get('@value','')}")
+            elif k.lower() == "repository":
+                repos_str = []
+                maxlen_folder = 0
+                maxlen_status = 0
+                for repo in v:
+                    folder_str = f'folder: {_colorize_green(repo.get("@folderName")):}'
+                    solutiontype_str = f'solutiontype: {_colorize_green(repo.get("@solutionType"))}'
+                    repo_url, repo_status = repo_info(home_path_src, repo.get("@folderName"))
+                    url_str = f'url: {_colorize_green(repo_url)}'
+                    status_str = f'status: {repo_status}'
+                    repos_str.append({"folder": folder_str,
+                                    "solutiontype": solutiontype_str,
+                                    "url": url_str,
+                                    "status": status_str})
+                    maxlen_folder = len(folder_str) if maxlen_folder < len(folder_str) else maxlen_folder
+                    maxlen_status = len(status_str) if maxlen_status < len(status_str) else maxlen_status
+                for repo_str in repos_str:
+                    log.info(f'{(indent)*indent_template}{repo_str["folder"].ljust(maxlen_folder)} {repo_str["status"].ljust(maxlen_status)} {repo_str["solutiontype"]} {repo_str["url"]}')
+            else:
+                for r in v:
+                    log.info(f"{(indent)*indent_template}{r}")
+        else:
+            if target_configuration is not None and k in target_configuration.keys():
+                if v == target_configuration[k]:
+                    # значение не меняется
+                    mark = _colorize_yellow("[.]")
+                    value = f"{_colorize_yellow(v)}"
+                else:
+                    # значение изменилось
+                    mark = _colorize_cyan('[*]')
+                    value = f"{_colorize_green(v)} ({_colorize_yellow(target_configuration[k])})"
+                    #value = f"'{_colorize_yellow(dst_config[k])}' -> '{_colorize_green(v)}'"
+            else:
+                # новая переменная в конфиге
+                mark = _colorize_green('[+]')
+                value = f"{_colorize_green(v)}"
+            log.info(f"{(indent)*indent_template}{mark}{k}: {value}")
+
+def _show_configurations_diff(config_path, target_configuration_name: str, message: str) -> None:
+    """Показать отличия двух конфигураций"""
+
+    if _is_ds_installed():
+        from ds_plugin.crossplatform_development_studio import CrossPlatformDevelopmentStudio
+        from sungero_deploy.common_consts import (
+            SERVICES_CONFIG_SECTION_NAME
+        )
+        from sungero_deploy.scripts_config import get_config_variable, change_config_variable
+
+
+        ds = CrossPlatformDevelopmentStudio(config_path)
+
+        desktop_path = f"{SERVICES_CONFIG_SECTION_NAME}/{ds._desktop_class_name}"
+        configurations_path = f"{desktop_path}/CONFIGURATIONS"
+        configurations = get_config_variable(configurations_path, "configuration", config_path) or {}
+        current_configuration_name = str(get_config_variable(desktop_path, "ACTIVE_CONFIGURATION", config_path)) or ''
+        log.info(f"Current ACTIVE_CONFIGURATION: '{current_configuration_name}'")
+        current_configuration = ds._get_configuration(configurations, current_configuration_name)
+        target_configuration = ds._get_configuration(configurations, target_configuration_name)
+        home_path_src = str(get_config_variable("variables", "home_path_src", config_path)) or ''
+        log.info(message)
+        _show_CommentedMap_ds(target_configuration, current_configuration, home_path_src)
+
+
 def _show_config(config_path):
     """Показать ключевые параметры указанного конфига"""
     config = yaml_tools.load_yaml_from_file(_get_check_file_path(config_path))
@@ -401,38 +500,52 @@ def _show_config(config_path):
     if "DevelopmentStudio" in config.get("services_config").keys() and \
         MAP_CONGIG_KEY in config.keys() and \
         config.get(MAP_CONGIG_KEY).get("show_dds_repos", True):
-        repos = config.get("services_config").get("DevelopmentStudio").get('REPOSITORIES').get("repository")
-        log.info('\nDDS:')
-        _show_repos(repos)
+        repos = config.get("services_config",{}).get("DevelopmentStudio",{}).get('REPOSITORIES',{}).get("repository",{})
+        if repos != {}:
+            log.info('\nDDS:')
+            _show_repos(repos)
 
     # Визуализация репозиториев для DS
     if "DevelopmentStudioDesktop" in config.get("services_config").keys() and \
         MAP_CONGIG_KEY in config.keys() and \
         config.get(MAP_CONGIG_KEY).get("show_ds_repos", True):
 
-        repos = config.get("services_config").get("DevelopmentStudioDesktop").get('REPOSITORIES').get("repository")
-        log.info('\nDS:')
-        _show_repos(repos)
+        if not _is_ds_mode_used():
+            repos = config.get("services_config",{}).get("DevelopmentStudioDesktop",{}).get('REPOSITORIES',{}).get("repository",{})
+            if repos != {}:
+                log.info('\nDS:')
+                _show_repos(repos)
 
-        if config.get(MAP_CONGIG_KEY).get("need_show_ds_configs", False):
-            # показать json для конфигурации Development Studio Desktop
-            configuration_str = '    {\n'
-            configuration_str += f'      "name": "{vars.get("database")}",\n'
-            configuration_str += f'      "title": "{vars.get("instance_name")}.{vars.get("database")}",\n'
-            rootDir = vars.get("home_path_src").replace("\\", "\\\\")
-            configuration_str += f'      "rootDirectory": "{rootDir}",\n'
-            configuration_str += '      "repositories": ['
-            for repo in repos:
-                configuration_str += '    {\n'
-                configuration_str += f'         "folderName": "{repo.get("@folderName")}",\n'
-                configuration_str += f'         "type": "{repo.get("@solutionType")}"'
-                if repo == repos[-1]:
-                    configuration_str += '\n        }'
-                else:
-                    configuration_str += '\n        },'
-            configuration_str += '\n      ]\n    }'
-            log.info('\nКонфигурация для DS:')
-            log.info(configuration_str)
+            if config.get(MAP_CONGIG_KEY).get("need_show_ds_configs", False):
+                # показать json для конфигурации Development Studio Desktop
+                configuration_str = '    {\n'
+                configuration_str += f'      "name": "{vars.get("database")}",\n'
+                configuration_str += f'      "title": "{vars.get("instance_name")}.{vars.get("database")}",\n'
+                rootDir = vars.get("home_path_src").replace("\\", "\\\\")
+                configuration_str += f'      "rootDirectory": "{rootDir}",\n'
+                configuration_str += '      "repositories": ['
+                for repo in repos:
+                    configuration_str += '    {\n'
+                    configuration_str += f'         "folderName": "{repo.get("@folderName")}",\n'
+                    configuration_str += f'         "type": "{repo.get("@solutionType")}"'
+                    if repo == repos[-1]:
+                        configuration_str += '\n        }'
+                    else:
+                        configuration_str += '\n        },'
+                configuration_str += '\n      ]\n    }'
+                log.info('\nКонфигурация для DS:')
+                log.info(configuration_str)
+        else:
+            if _is_ds_installed():
+                    active_configuration_name = config.get("services_config",{}).get("DevelopmentStudioDesktop",{}).get('ACTIVE_CONFIGURATION',"")
+                    from ds_plugin.crossplatform_development_studio import CrossPlatformDevelopmentStudio
+                    configurations = config.get("services_config",{}).get("DevelopmentStudioDesktop",{}).get('CONFIGURATIONS',{}).get('configuration',[])
+                    current_configuration = CrossPlatformDevelopmentStudio(config_path)._get_configuration(configurations, name=active_configuration_name)
+                    repos = current_configuration.get('REPOSITORIES', {}).get('repository', [])
+                    log.info('\nDS:')
+                    log.info(f'active_configuration={active_configuration_name}')
+                    _show_repos(repos)
+
 
 def _show_CommentedMap(template_config: CommentedMap, dst_config: CommentedMap, indent: int = 1, original_template_config: CommentedMap = None):
     indent_template = "  "
@@ -602,6 +715,66 @@ class ManageAppliedProject(BaseComponent):
             pause()
         return result
 
+    def create_project_ds(self, target_configuration_name: str, confirm: bool = True, need_pause: bool = True) -> None:
+        """ Создать новый прикладной проект (эксперементальная фича).
+        Будет создана БД, в неё будет принят пакет разработки и стандратные шаблоны.
+
+        Args:
+            configuration_name: имя конфигурации из config.yml
+            confirm: признак необходимости выводить запрос на создание проекта. По умолчанию - True
+            need_pause: признак необходимости в конце сделать паузу и ожидать нажатия клавиши пользователем. По умолчанию - False
+        """
+
+
+        if not _is_ds_mode_used():
+            log.info(_colorize_yellow("Создание проекта на основе конфигураии должно использоваться для версий 26.2 и новее."))
+            pause()
+
+        if _is_ds_installed():
+            from ds_plugin.crossplatform_development_studio import CrossPlatformDevelopmentStudio
+
+            while (True):
+                #_show_config(self.config_path)
+                _show_configurations_diff(self.config_path, target_configuration_name,
+                                          f"Предлагаемые изменения config.yml ({_colorize_green('Новые значения')}, {_colorize_yellow('Текущие значения')})")
+                answ = input("Создать новый проект? (y,n):") if confirm else 'y'
+                if answ=='y' or answ=='Y':
+                    # остановить сервисы
+                    log.info(_colorize_green("Остановка сервисов"))
+                    all = All(self.config)
+                    all.down()
+
+                    # активировать новую конфигурацию
+                    log.info(_colorize_green(f"Активация конфигурации {target_configuration_name}"))
+                    CrossPlatformDevelopmentStudio(self.config_path).change_configuration(name=target_configuration_name)
+                    time.sleep(2)
+
+                    # создать БД
+                    log.info(_colorize_green("Создать БД"))
+                    exitcode = SungeroDB(get_config_model(self.config_path)).up()
+                    if exitcode == -1:
+                        log.error(f'Ошибка при создании БД')
+                        return
+
+                    # поднять сервисы
+                    log.info(_colorize_green("Подъем сервисов"))
+                    all2 = All(get_config_model(self.config_path))
+                    all2.config_up()
+                    all2.up()
+                    all2.check()
+
+                    # TODO: обновить настройки DevelopmentStudio
+
+                    log.info("")
+                    log.info(_colorize_green("Новые параметры:"))
+                    self.current()
+                    if need_pause or need_pause is None:
+                        pause()
+                    break
+                elif answ=='n' or answ=='N':
+                    break
+
+
     def create_project(self, project_config_path: str, package_path:str = "",
                        need_import_src:bool = False, confirm: bool = True,
                        rundds: bool = None, need_pause: bool = False) -> None:
@@ -616,6 +789,12 @@ class ManageAppliedProject(BaseComponent):
             rundds: признак необходимости запускать DDS. По умолчанию - None, т.е. будет браться значение, определенное в config.yml
             need_pause: признак необходимости в конце сделать паузу и ожидать нажатия клавиши пользователем. По умолчанию - False
         """
+
+        if _is_ds_mode_used():
+            log.info(_colorize_yellow("Создание проекта в режиме DS не реализовано. Используйте переключение конфигураций в DS"))
+            pause()
+            return
+
         while (True):
             """Подгрузить необходимые модули.
             Выполняется именно тут, т.к:
@@ -663,7 +842,7 @@ class ManageAppliedProject(BaseComponent):
                 if package_path != "":
                     log.info(_colorize_green("Прием пакета разработки"))
                     if 'platform_plugin.deployment_tool' in sys.modules:
-                        from platform_plugin.deployment_tool import DeploymentTool # 4.5
+                        from platform_plugin.deployment_tool import DeploymentTool # 4.5+
                     else:
                         from sungero_deploy.deployment_tool import DeploymentTool # 4.2-4.4
                     DeploymentTool(self.config_path).deploy(package = package_path, init = True)
@@ -682,7 +861,7 @@ class ManageAppliedProject(BaseComponent):
                 #   * если делать при загрузке - то модули-зависимости могут не успеть подгрузиться
                 #   * DevelopmentStudio может не быть не установлены и надо об этом сообщать
                 log.info(_colorize_green("Обновление конфига DevelopmentStudio"))
-                if 'dds_plugin.development_studio' in sys.modules:
+                if _is_dds_installed():
                     from dds_plugin.development_studio import DevelopmentStudio
                     DevelopmentStudio(self.config_path).generate_config_settings()
                     # принять пакет разработки с исходниками
@@ -696,8 +875,6 @@ class ManageAppliedProject(BaseComponent):
                 if 'dt_ui_plugin.deployment_tool_ui' in sys.modules:
                     from dt_ui_plugin.deployment_tool_ui import DeploymentToolUI
                     DeploymentToolUI(self.config_path).generate_config_settings()
-                else:
-                    log.warning('Модуль deployment_tool_ui plugin-а dt_ui_plugin для компоненты DeploymentToolUI не найден.')
 
                 log.info("")
                 log.info(_colorize_green("Новые параметры:"))
@@ -712,9 +889,97 @@ class ManageAppliedProject(BaseComponent):
             elif answ=='n' or answ=='N':
                 break
 
+    def set_ds(self, configuration_name: str = None, confirm: bool = True,
+           need_pause: bool = False, need_check = True) -> None:
+        """ Переключиться на указанный прикладной проект в режиме DDS
+
+        Args:
+            configuration_name: имя конфигурации
+            confirm: признак необходимости выводить запрос на создание проекта. По умолчанию - True
+            need_pause: признак необходимости в конце сделать паузу и ожидать нажатия клавиши пользователем. По умолчанию - False
+            need_check: признак необходимости проверки отклика сервисов после перзапуска. По умолчанию - True
+        """
+        if _is_ds_installed():
+            from ds_plugin.crossplatform_development_studio import CrossPlatformDevelopmentStudio
+
+            while (True):
+                #_show_config(self.config_path)
+                _show_configurations_diff(self.config_path, configuration_name,
+                                          f"Предлагаемые изменения config.yml ({_colorize_green('Новые значения')}, {_colorize_yellow('Текущие значения')})")
+                answ = input("Переключить проект? (y,n):") if confirm else 'y'
+                if answ=='y' or answ=='Y':
+                    # остановить сервисы
+                    log.info(_colorize_green("Остановка сервисов"))
+                    all = All(self.config)
+                    all.down()
+
+                    # активировать новую конфигурацию
+                    log.info(_colorize_green(f"Активация конфигурации {configuration_name}"))
+                    ds = CrossPlatformDevelopmentStudio(self.config_path)
+                    ds.change_configuration(name=configuration_name)
+                    time.sleep(2)
+                    if _is_dds_installed():
+
+                        from sungero_deploy.common_consts import (
+                            SERVICES_CONFIG_SECTION_NAME
+                        )
+                        from sungero_deploy.scripts_config import get_config_variable, change_config_variable
+
+
+                        desktop_path = f"{SERVICES_CONFIG_SECTION_NAME}/{ds._desktop_class_name}"
+                        current_configuration_name = str(get_config_variable(desktop_path, "ACTIVE_CONFIGURATION", self.config_path)) or ''
+                        configurations_path = f"{desktop_path}/CONFIGURATIONS"
+                        configurations = get_config_variable(configurations_path, "configuration", self.config_path) or {}
+                        src_configuration = ds._get_configuration(configurations, current_configuration_name)
+                        src_settings = CrossPlatformDevelopmentStudio._get_settings(src_configuration)
+
+                        config = yaml_tools.load_yaml_from_file(self.config_path)
+                        log.info(config[SERVICES_CONFIG_SECTION_NAME]["DevelopmentStudio"])
+                        log.info(src_configuration["REPOSITORIES"])
+                        config[SERVICES_CONFIG_SECTION_NAME]["DevelopmentStudio"]["REPOSITORIES"] = copy.deepcopy(src_configuration["REPOSITORIES"])
+                        yaml_tools.yaml_dump_to_file(config, self.config_path)
+
+
+                    # поднять сервисы
+                    log.info(_colorize_green("Подъем сервисов"))
+                    all2 = All(get_config_model(self.config_path))
+                    all2.config_up()
+                    all2.up()
+                    all2.check()
+
+                    # TODO: обновить настройки DevelopmentStudio
+
+                    log.info("")
+                    log.info(_colorize_green("Новые параметры:"))
+                    self.current()
+                    if need_pause or need_pause is None:
+                        pause()
+                    break
+                elif answ=='n' or answ=='N':
+                    break
+
+
     def set(self, project_config_path: str = None, confirm: bool = True, rundds: bool = None,
            need_pause: bool = False, need_convert_db = True, need_check = True) -> None:
-        """ Переключиться на указанный прикладной проект
+        """ Переключиться на указанный прикладной проект в режиме DDS
+
+        Args:
+            project_config_path: путь к файлу с описанием проекта
+            confirm: признак необходимости выводить запрос на создание проекта. По умолчанию - True
+            rundds: признак необходимости запускать DDS. По умолчанию - None, т.е. будет браться значение, определенное в config.yml
+            need_pause: признак необходимости в конце сделать паузу и ожидать нажатия клавиши пользователем. По умолчанию - False
+            need_convert_db: признак необходимости запустить конвертацию БД. По умолчанию - True
+            beed_check: признак необходимости проверки отклика сервисов после перзапуска. По умолчанию - True
+        """
+        if _is_ds_mode_used():
+            log.info(_colorize_yellow("Переключение в режиме DS не реализовано. Используйте переключение конфигураций в DS"))
+            pause()
+        else:
+            self._set_dds_mode(project_config_path, confirm, rundds, need_pause, need_convert_db, need_check)
+
+    def _set_dds_mode(self, project_config_path: str, confirm: bool, rundds: bool,
+           need_pause: bool, need_convert_db, need_check) -> None:
+        """ Переключиться на указанный прикладной проект в режиме DDS
 
         Args:
             project_config_path: путь к файлу с описанием проекта
@@ -803,7 +1068,7 @@ class ManageAppliedProject(BaseComponent):
                 #   * если делать при загрузке - то модули-зависимости могут не успеть подгрузиться
                 #   * DevelopmentStudio может не быть не установлены и надо об этом сообщать
                 log.info(_colorize_green("Обновление конфига DevelopmentStudio"))
-                if 'dds_plugin.development_studio' in sys.modules:
+                if _is_dds_installed():
                     from dds_plugin.development_studio import DevelopmentStudio
                     DevelopmentStudio(self.config_path).generate_config_settings()
                 else:
@@ -834,7 +1099,7 @@ class ManageAppliedProject(BaseComponent):
         Args:
             new_config_path: путь к файлу, который нужно создать
         """
-        template_config="""# ключевые параметры проекта
+        template_config_dds="""# ключевые параметры проекта
 variables:
     # Назначение проекта
     purpose: '<Назначение проекта>'
@@ -857,7 +1122,155 @@ services_config:
                 '@solutionType': 'Base'
                 '@url': '<url репозитория-2>'
 """
+
+        template_config_ds_dds="""# ключевые параметры проекта
+variables:
+    # Корневой каталог c репозиториями проекта
+    home_path_src: '<корневой каталог репозитория проекта>'
+# репозитории
+services_config:
+    DevelopmentStudio:
+        REPOSITORIES:
+            repository:
+            -   '@folderName': '<папка репозитория-1>'
+                '@solutionType': 'Work'
+                '@url': '<url репозитория-1>'
+            -   '@folderName': '<папка репозитория-2>'
+                '@solutionType': 'Base'
+                '@url': '<url репозитория-2>'
+    DevelopmentStudioDesktop:
+        CONFIGURATIONS:
+            configuration:
+            -   '@name': '<Имя конфигурации>'
+                '@GIT_ROOT_DIRECTORY': '{{ home_path_src }}'
+                SETTINGS:
+                    setting:
+                    -   '@name': 'variables/database'
+                        '@value': '<База данных>'
+                    -   '@name': 'variables/home_path'
+                        '@value': '<Домашний каталог>'
+                    -   '@name': 'variables/purpose'
+                        '@value': '<Назначение>'
+                REPOSITORIES:
+                    repository:
+                    -   '@folderName': '<папка репозитория-1>'
+                        '@solutionType': 'Work'
+                    -   '@folderName': '<папка репозитория-2>'
+                        '@solutionType': 'Base'
+"""
+
+        template_config_ds="""# ключевые параметры проекта
+variables:
+    # Корневой каталог c репозиториями проекта
+    home_path_src: '<корневой каталог репозитория проекта>'
+# репозитории
+services_config:
+    DevelopmentStudioDesktop:
+        CONFIGURATIONS:
+            configuration:
+            -   '@name': '<Имя конфигурации>'
+                '@GIT_ROOT_DIRECTORY': '{{ home_path_src }}'
+                SETTINGS:
+                    setting:
+                    -   '@name': 'variables/database'
+                        '@value': '<База данных>'
+                    -   '@name': 'variables/home_path'
+                        '@value': '<Домашний каталог>'
+                    -   '@name': 'variables/purpose'
+                        '@value': '<Назначение>'
+                REPOSITORIES:
+                    repository:
+                    -   '@folderName': '<папка репозитория-1>'
+                        '@solutionType': 'Work'
+                    -   '@folderName': '<папка репозитория-2>'
+                        '@solutionType': 'Base'
+"""
+
+        template_config = template_config_dds if not _is_ds_mode_used() else template_config_ds_dds if _is_dds_installed() else template_config_ds
         _generate_empty_config_by_template(new_config_path, template_config)
+
+    def clone_project_ds(self, src_configuration_name: str, dst_configuration_name: str,
+                        confirm: bool = True, need_pause: bool = False) -> None:
+        """ Сделать копию прикладного проекта (эксперементальная фича).
+        Будет сделана копия БД и домашнего каталога проекта.
+
+        Args:
+            src_project_config_path: путь к файлу с описанием проекта-источника
+            dst_project_config_path: путь к файлу с описанием проекта, в который надо скопировать
+            confirm: признак необходимости выводить запрос на создание проекта. По умолчанию - True
+            rundds: признак необходимости запускать DDS. По умолчанию - None, т.е. будет браться значение, определенное в config.yml
+            need_pause: признак необходимости в конце сделать паузу и ожидать нажатия клавиши пользователем. По умолчанию - False
+        """
+
+        if not _is_ds_mode_used():
+            log.info(_colorize_yellow("Создание копии проекта на основе конфигураии должно использоваться для версий 26.2 и новее."))
+            pause()
+
+        if _is_ds_installed():
+            from ds_plugin.crossplatform_development_studio import CrossPlatformDevelopmentStudio
+            from sungero_deploy.common_consts import (
+                SERVICES_CONFIG_SECTION_NAME
+            )
+            from sungero_deploy.scripts_config import get_config_variable, change_config_variable
+
+
+            ds = CrossPlatformDevelopmentStudio(self.config_path)
+
+            desktop_path = f"{SERVICES_CONFIG_SECTION_NAME}/{ds._desktop_class_name}"
+            configurations_path = f"{desktop_path}/CONFIGURATIONS"
+            configurations = get_config_variable(configurations_path, "configuration", self.config_path) or {}
+            src_configuration = ds._get_configuration(configurations, src_configuration_name)
+            src_settings = CrossPlatformDevelopmentStudio._get_settings(src_configuration)
+            dst_configuration = ds._get_configuration(configurations, dst_configuration_name)
+            dst_settings = CrossPlatformDevelopmentStudio._get_settings(dst_configuration)
+
+
+            sungero_db = SungeroDB(get_config_model(self.config_path))
+            src_dbname = src_settings["variables/database"]
+            src_homepath = src_settings["variables/home_path"]
+            datadase_engine = get_config_variable("common_config", "DATABASE_ENGINE", self.config_path) or {}
+            dst_dbname = dst_settings["variables/database"]
+            dst_homepath = dst_settings["variables/home_path"]
+            log.info(f"----- {src_dbname}, {src_homepath}, {dst_dbname}, {dst_homepath}, {datadase_engine}")
+
+            if not Path(src_homepath).is_dir():
+                raise AssertionError(f'Исходный домашний каталог "{src_homepath}" не существует.')
+            if not sungero_db.is_db_exist(src_dbname):
+                raise AssertionError(f'Исходная база данных "{src_dbname}" не существует.')
+
+            if Path(dst_homepath).is_dir():
+                raise AssertionError(f'Целевой домашний каталог "{dst_homepath}" уже существует.')
+            if sungero_db.is_db_exist(dst_dbname):
+                raise AssertionError(f'Целевая база данных "{dst_dbname}" уже существует.')
+
+
+            while (True):
+                log.info('')
+                log.info(Bold(f'Параметры клонирования проекта:'))
+                log.info(f'database: {_colorize_green(src_dbname)} -> {_colorize_green(dst_dbname)}')
+                log.info(f'homepath: {_colorize_green(src_homepath)} -> {_colorize_green(dst_homepath)}')
+
+                answ = input("Клонировать проект? (y,n):") if confirm else 'y'
+                if answ=='y' or answ=='Y':
+                    # Копирование БД
+                    log.info(_colorize_green(f'Копирование базы данных {src_dbname} в {dst_dbname}'))
+                    if datadase_engine == 'mssql':
+                        _copy_database_mssql(self.config, src_dbname, dst_dbname)
+                    else:
+                        cfg = yaml_tools.load_yaml_from_file(self.config_path)
+                        _copy_database_postgresql(cfg, src_dbname, dst_dbname)
+                        #_copy_database_postgresql(src_sungero_config, src_dbname, dst_dbname)
+                    # Сделать копию домашнего каталога проекта
+                    log.info(_colorize_green(f'Копирование домашнего каталога {src_homepath} {dst_homepath}'))
+                    shutil.copytree(src_homepath, dst_homepath)
+                    # переключить проект
+                    log.info(_colorize_green(f"Активация конфигурации {dst_configuration_name}"))
+                    CrossPlatformDevelopmentStudio(self.config_path).change_configuration(name=dst_configuration_name)
+                    time.sleep(2)
+                    break
+                elif answ=='n' or answ=='N':
+                    break
+
 
     def clone_project(self, src_project_config_path: str, dst_project_config_path: str,
                         confirm: bool = True, rundds: bool = None, need_pause: bool = False) -> None:
@@ -871,6 +1284,11 @@ services_config:
             rundds: признак необходимости запускать DDS. По умолчанию - None, т.е. будет браться значение, определенное в config.yml
             need_pause: признак необходимости в конце сделать паузу и ожидать нажатия клавиши пользователем. По умолчанию - False
         """
+
+        if _is_ds_mode_used():
+            log.info(_colorize_yellow("Создание копии проекта в режиме DS не реализовано"))
+            pause()
+
         sungero_db = SungeroDB(get_config_model(self.config_path))
 
         src_project_config = yaml_tools.load_yaml_from_file(_get_check_file_path(src_project_config_path))
@@ -922,7 +1340,7 @@ services_config:
         Args:
             project_config_path: путь к файлу с описанием проекта, чьи исходники требуется открыть
          """
-        if 'dds_plugin.development_studio' in sys.modules:
+        if _is_dds_installed():
             # подготовить временные файлы для временных config.yml и _ConfigSettings.xml
             import tempfile
             dst_config_file_descriptor = tempfile.mkstemp(prefix="map_config_", suffix=".yml")
@@ -949,7 +1367,7 @@ services_config:
             from sungero_deploy.services_config import generate_service_config, get_default_tool_host_values_mapping
             dds = DevelopmentStudio(dst_config_path)
             generate_service_config(config_settings_file_name, get_config_model(dst_config_path), dds.instance_service,
-                                get_default_tool_host_values_mapping())
+                                    get_default_tool_host_values_mapping())
 
             # запустить dds со специальным _ConfigSettings.xml
             cmd = f'"{dds._get_exe_path()}" --multi-instance --settings {config_settings_file_name}'
@@ -1108,7 +1526,7 @@ services_config:
         * DDS может не быть не установлены и надо об этом сообщать
         """
         import sys
-        if 'dds_plugin.development_studio' in sys.modules:
+        if _is_dds_installed():
             from dds_plugin.development_studio import DevelopmentStudio
         else:
             log.error('Не найден модуль dds_plugin.development_studio')

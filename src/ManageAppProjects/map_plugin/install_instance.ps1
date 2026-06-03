@@ -157,18 +157,33 @@ elseif ($version -in @("25.1", "25.2", "25.3"))
 {
   Write-Host @("25.1", "25.2", "25.3")
   .\do.bat components add_package $rx_instaler_dir_path\Platform.zip
-  .\do.bat components add_package $rx_instaler_dir_path\DevelopmentStudio.zip 
-  .\do.bat components add_package $rx_instaler_dir_path\Base.zip
-  .\do.bat dds install
+  if (Test-Path $rx_instaler_dir_path\developmentstudio.zip -PathType Leaf) 
+  {
+    .\do.bat components add_package $rx_instaler_dir_path\developmentstudio.zip 
+  }
+  .\do.bat components add_package $rx_instaler_dir_path\base.zip
+  if (Test-Path $rx_instaler_dir_path\developmentstudio.zip -PathType Leaf) 
+  {
+    .\do.bat dds install
+  }
 }
 elseif ($version -in @("26.1", "26.2"))
 {
   Write-Host @("26.1", "26.2")
   .\do.bat components add_package $rx_instaler_dir_path\platform.zip
-  .\do.bat components add_package $rx_instaler_dir_path\developmentstudio.zip 
-  .\do.bat components add_package $rx_instaler_dir_path\crossplatformdevelopmentstudio.zip
+  if (Test-Path $rx_instaler_dir_path\developmentstudio.zip -PathType Leaf) 
+  {
+    .\do.bat components add_package $rx_instaler_dir_path\developmentstudio.zip 
+  }
+  if (Test-Path $rx_instaler_dir_path\crossplatformdevelopmentstudio.zip -PathType Leaf) 
+  {
+    .\do.bat components add_package $rx_instaler_dir_path\crossplatformdevelopmentstudio.zip
+  }
   .\do.bat components add_package $rx_instaler_dir_path\base.zip
-  .\do.bat dds install
+  if (Test-Path $rx_instaler_dir_path\developmentstudio.zip -PathType Leaf) 
+  {
+    .\do.bat dds install
+  }
 }
 else {
   Write-Host "Версия $version не поддерживается" -ForegroundColor Red
