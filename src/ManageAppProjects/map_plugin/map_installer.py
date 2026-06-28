@@ -1267,6 +1267,12 @@ services_config:
                     log.info(_colorize_green(f"Активация конфигурации {dst_configuration_name}"))
                     CrossPlatformDevelopmentStudio(self.config_path).change_configuration(name=dst_configuration_name)
                     time.sleep(2)
+                    # перезапустить сервисы
+                    log.info(_colorize_green("Перезапуск сервисов"))
+                    all = All(get_config_model(self.config_path))
+                    all.config_up()
+                    all.up()
+                    all.check()
                     break
                 elif answ=='n' or answ=='N':
                     break
