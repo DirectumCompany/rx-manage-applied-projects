@@ -1198,7 +1198,6 @@ services_config:
             src_project_config_path: путь к файлу с описанием проекта-источника
             dst_project_config_path: путь к файлу с описанием проекта, в который надо скопировать
             confirm: признак необходимости выводить запрос на создание проекта. По умолчанию - True
-            rundds: признак необходимости запускать DDS. По умолчанию - None, т.е. будет браться значение, определенное в config.yml
             need_pause: признак необходимости в конце сделать паузу и ожидать нажатия клавиши пользователем. По умолчанию - False
         """
 
@@ -1263,16 +1262,9 @@ services_config:
                     # Сделать копию домашнего каталога проекта
                     log.info(_colorize_green(f'Копирование домашнего каталога {src_homepath} {dst_homepath}'))
                     shutil.copytree(src_homepath, dst_homepath)
-                    # переключить проект
-                    log.info(_colorize_green(f"Активация конфигурации {dst_configuration_name}"))
-                    CrossPlatformDevelopmentStudio(self.config_path).change_configuration(name=dst_configuration_name)
-                    time.sleep(2)
-                    # перезапустить сервисы
-                    log.info(_colorize_green("Перезапуск сервисов"))
-                    all = All(get_config_model(self.config_path))
-                    all.config_up()
-                    all.up()
-                    all.check()
+
+                    log.info("")
+                    log.info(_colorize_cyan('Клонирование проекта завершено. При необходимости переключитесь на новый проект.'))
                     break
                 elif answ=='n' or answ=='N':
                     break
