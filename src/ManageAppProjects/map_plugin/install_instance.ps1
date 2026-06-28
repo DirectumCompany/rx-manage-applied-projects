@@ -167,9 +167,9 @@ elseif ($version -in @("25.1", "25.2", "25.3"))
     .\do.bat dds install
   }
 }
-elseif ($version -in @("26.1", "26.2"))
+elseif ($version -in @("26.1"))
 {
-  Write-Host @("26.1", "26.2")
+  Write-Host @("26.1")
   .\do.bat components add_package $rx_instaler_dir_path\platform.zip
   if (Test-Path $rx_instaler_dir_path\developmentstudio.zip -PathType Leaf) 
   {
@@ -184,6 +184,16 @@ elseif ($version -in @("26.1", "26.2"))
   {
     .\do.bat dds install
   }
+}
+elseif ($version -in @("26.2"))
+{
+  Write-Host @("26.2")
+  .\do.bat components add_package $rx_instaler_dir_path\platform.zip
+  if (Test-Path $rx_instaler_dir_path\crossplatformdevelopmentstudio.zip -PathType Leaf) 
+  {
+    .\do.bat components add_package $rx_instaler_dir_path\crossplatformdevelopmentstudio.zip
+  }
+  .\do.bat components add_package $rx_instaler_dir_path\base.zip
 }
 else {
   Write-Host "Версия $version не поддерживается" -ForegroundColor Red
