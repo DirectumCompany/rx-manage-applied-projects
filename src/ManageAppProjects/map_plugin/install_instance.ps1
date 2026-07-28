@@ -185,7 +185,7 @@ elseif ($version -in @("26.1"))
     .\do.bat dds install
   }
 }
-elseif ($version -in @("26.2"))
+elseif ($version -in @("26.2", "26.3"))
 {
   Write-Host @("26.2")
   .\do.bat components add_package $rx_instaler_dir_path\platform.zip
