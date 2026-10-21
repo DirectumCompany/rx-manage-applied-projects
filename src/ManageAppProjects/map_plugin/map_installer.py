@@ -1653,9 +1653,11 @@ services_config:
                               need_pause: bool = False) -> None:
 
         repo_info = self._exctract_repos_info(project_config if project_config is not None else self.config_path)
-        all_repos = [r for r in repo_info['work']]
-        all_repos.extend([r for r in repo_info['base']])
-        print(all_repos)
+        all_repos_work = [r for r in repo_info['work']]
+        print(f'all_repos_work: {all_repos_work}')
+
+        all_repos_base = [r for r in repo_info['base']]
+        print(f'all_repos_base: {all_repos_base}')
 
         import sys
         if 'platform_plugin.deployment_tool' in sys.modules:
@@ -1665,7 +1667,8 @@ services_config:
         dt.export_package(export_package=devpack_file_name,
                           root=repo_info['root'],
                           configuration=devpack_config_name,
-                          repositories=";".join(all_repos))
+                          repositories=";".join(all_repos_base),
+                          work=";".join(all_repos_work))
 
         if need_pause or need_pause is None:
             pause()
