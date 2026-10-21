@@ -55,9 +55,10 @@ def _get_rx_version(need_short: bool = True) -> str:
         return manifest_dict["version"]
 
 def _is_ds_mode_used() -> bool:
-    # начиная с 26.2 использовать новый режим переключения между проектами
-    # который предполагает обязательное использование DS
-    return _get_rx_version().startswith("26.2")
+    # начиная с 26.2 предполагается, что используется DS
+    version_str = _get_rx_version().split(".")
+    version = int(version_str[0])*1000+int(version_str[1])
+    return version >= 26002
 
 def _is_dds_installed() -> bool:
     return 'dds_plugin.development_studio' in sys.modules
@@ -899,6 +900,11 @@ class ManageAppliedProject(BaseComponent):
             need_pause: признак необходимости в конце сделать паузу и ожидать нажатия клавиши пользователем. По умолчанию - False
             need_check: признак необходимости проверки отклика сервисов после перзапуска. По умолчанию - True
         """
+        if _is_ds_mode_used():
+            log.info(_colorize_yellow("При использовании DS используйте переключение конфигураций в DS"))
+            pause()
+            return
+
         if _is_ds_installed():
             from ds_plugin.crossplatform_development_studio import CrossPlatformDevelopmentStudio
 
